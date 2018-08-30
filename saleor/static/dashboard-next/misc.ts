@@ -109,3 +109,11 @@ export function decimal(value: string) {
 
 export const removeDoubleSlashes = (url: string) =>
   url.replace(/([^:]\/)\/+/g, "$1");
+
+export function Ø<T>(exp: () => T, d?: T) {
+  try {
+    return exp();
+  } catch {
+    return d;
+  }
+}
