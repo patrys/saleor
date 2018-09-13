@@ -1,6 +1,24 @@
 /* tslint:disable */
 //  This file was automatically generated and should not be edited.
 
+export interface FulfillmentCreateInput {
+  // ID of the order to be fulfilled.
+  order?: string | null,
+  // Fulfillment tracking number
+  trackingNumber?: string | null,
+  // If true, send an email notification to the customer.
+  notifyCustomer?: boolean | null,
+  // Item line to be fulfilled.
+  lines?: Array< FulfillmentLineInput | null > | null,
+};
+
+export interface FulfillmentLineInput {
+  // The ID of the order line.
+  orderLineId?: string | null,
+  // The number of line item(s) to be fulfiled.
+  quantity?: number | null,
+};
+
 // An enumeration.
 export enum OrderStatus {
   CANCELED = "CANCELED", // Canceled
@@ -594,12 +612,12 @@ export interface OrderCancelMutation {
         message: string | null,
         // Number of items.
         quantity: number | null,
+        // Order event type
+        type: OrderEvents | null,
         // User who performed the action.
         user:  {
           email: string,
         } | null,
-        // Order event type
-        type: OrderEvents | null,
       } | null > | null,
       // List of shipments for the order.
       fulfillments:  Array< {
@@ -742,6 +760,15 @@ export interface OrderRefundMutationVariables {
 
 export interface OrderRefundMutation {
   orderRefund:  {
+    // List of errors that occurred executing the mutation.
+    errors:  Array< {
+      // Name of a field that caused the error. A value of
+      // `null` indicates that the error isn't associated with a particular
+      // field.
+      field: string | null,
+      // The error message.
+      message: string | null,
+    } | null > | null,
     // A refunded order.
     order:  {
       // The ID of the object.
@@ -778,12 +805,12 @@ export interface OrderRefundMutation {
         message: string | null,
         // Number of items.
         quantity: number | null,
+        // Order event type
+        type: OrderEvents | null,
         // User who performed the action.
         user:  {
           email: string,
         } | null,
-        // Order event type
-        type: OrderEvents | null,
       } | null > | null,
       // List of shipments for the order.
       fulfillments:  Array< {
@@ -961,12 +988,12 @@ export interface OrderReleaseMutation {
         message: string | null,
         // Number of items.
         quantity: number | null,
+        // Order event type
+        type: OrderEvents | null,
         // User who performed the action.
         user:  {
           email: string,
         } | null,
-        // Order event type
-        type: OrderEvents | null,
       } | null > | null,
       // List of shipments for the order.
       fulfillments:  Array< {
@@ -1102,6 +1129,217 @@ export interface OrderReleaseMutation {
   } | null,
 };
 
+export interface OrderCaptureMutationVariables {
+  id: string,
+  amount: string,
+};
+
+export interface OrderCaptureMutation {
+  orderCapture:  {
+    // List of errors that occurred executing the mutation.
+    errors:  Array< {
+      // Name of a field that caused the error. A value of
+      // `null` indicates that the error isn't associated with a particular
+      // field.
+      field: string | null,
+      // The error message.
+      message: string | null,
+    } | null > | null,
+    // Captured order.
+    order:  {
+      // The ID of the object.
+      id: string,
+      billingAddress:  {
+        // The ID of the object.
+        id: string,
+        city: string,
+        cityArea: string,
+        companyName: string,
+        country: AddressCountry,
+        countryArea: string,
+        firstName: string,
+        lastName: string,
+        phone: string | null,
+        postalCode: string,
+        streetAddress1: string,
+        streetAddress2: string,
+      } | null,
+      created: string,
+      // List of events associated with the order.
+      events:  Array< {
+        // The ID of the object.
+        id: string,
+        // Amount of money.
+        amount: number | null,
+        // Date when event happened at in ISO 8601 format.
+        date: string | null,
+        // Email of the customer
+        email: string | null,
+        // Type of an email sent to the customer
+        emailType: string | null,
+        // Content of a note added to the order.
+        message: string | null,
+        // Number of items.
+        quantity: number | null,
+        // Order event type
+        type: OrderEvents | null,
+        // User who performed the action.
+        user:  {
+          email: string,
+        } | null,
+      } | null > | null,
+      // List of shipments for the order.
+      fulfillments:  Array< {
+        // The ID of the object.
+        id: string,
+        lines:  {
+          edges:  Array< {
+            // The item at the end of the edge
+            node:  {
+              // The ID of the object.
+              id: string,
+              orderLine:  {
+                // The ID of the object.
+                id: string,
+                productName: string,
+              },
+              quantity: number,
+            },
+          } >,
+        } | null,
+        status: FulfillmentStatus,
+        trackingNumber: string,
+      } | null >,
+      lines:  {
+        edges:  Array< {
+          // The item at the end of the edge
+          node:  {
+            // The ID of the object.
+            id: string,
+            productName: string,
+            productSku: string,
+            quantity: number,
+            quantityFulfilled: number,
+            unitPrice:  {
+              // Amount of money including taxes.
+              gross:  {
+                // Amount of money.
+                amount: number,
+                // Currency code.
+                currency: string,
+              },
+              // Amount of money without taxes.
+              net:  {
+                // Amount of money.
+                amount: number,
+                // Currency code.
+                currency: string,
+              },
+            } | null,
+          },
+        } >,
+      } | null,
+      // User-friendly number of an order.
+      number: string | null,
+      // Internal payment status.
+      paymentStatus: string | null,
+      shippingAddress:  {
+        // The ID of the object.
+        id: string,
+        city: string,
+        cityArea: string,
+        companyName: string,
+        country: AddressCountry,
+        countryArea: string,
+        firstName: string,
+        lastName: string,
+        phone: string | null,
+        postalCode: string,
+        streetAddress1: string,
+        streetAddress2: string,
+      } | null,
+      shippingMethod:  {
+        // The ID of the object.
+        id: string,
+      } | null,
+      shippingMethodName: string | null,
+      shippingPrice:  {
+        // Amount of money including taxes.
+        gross:  {
+          // Amount of money.
+          amount: number,
+          // Currency code.
+          currency: string,
+        },
+      } | null,
+      status: OrderStatus,
+      // The sum of line prices not including shipping.
+      subtotal:  {
+        // Amount of money including taxes.
+        gross:  {
+          // Amount of money.
+          amount: number,
+          // Currency code.
+          currency: string,
+        },
+      } | null,
+      total:  {
+        // Amount of money including taxes.
+        gross:  {
+          // Amount of money.
+          amount: number,
+          // Currency code.
+          currency: string,
+        },
+        // Amount of taxes.
+        tax:  {
+          // Amount of money.
+          amount: number,
+          // Currency code.
+          currency: string,
+        },
+      } | null,
+      // Amount authorized for the order.
+      totalAuthorized:  {
+        // Amount of money.
+        amount: number,
+        // Currency code.
+        currency: string,
+      } | null,
+      // Amount captured by payment.
+      totalCaptured:  {
+        // Amount of money.
+        amount: number,
+        // Currency code.
+        currency: string,
+      } | null,
+      user:  {
+        // The ID of the object.
+        id: string,
+        email: string,
+      } | null,
+    } | null,
+  } | null,
+};
+
+export interface OrderCreateFulfillmentMutationVariables {
+  input: FulfillmentCreateInput,
+};
+
+export interface OrderCreateFulfillmentMutation {
+  fulfillmentCreate:  {
+    // List of errors that occurred executing the mutation.
+    errors:  Array< {
+      // Name of a field that caused the error. A value of
+      // `null` indicates that the error isn't associated with a particular
+      // field.
+      field: string | null,
+      // The error message.
+      message: string | null,
+    } | null > | null,
+  } | null,
+};
+
 export interface OrderListQueryVariables {
   first?: number | null,
   after?: string | null,
@@ -1191,12 +1429,12 @@ export interface OrderDetailsQuery {
       message: string | null,
       // Number of items.
       quantity: number | null,
+      // Order event type
+      type: OrderEvents | null,
       // User who performed the action.
       user:  {
         email: string,
       } | null,
-      // Order event type
-      type: OrderEvents | null,
     } | null > | null,
     // List of shipments for the order.
     fulfillments:  Array< {
@@ -3376,12 +3614,12 @@ export interface OrderDetailsFragment {
     message: string | null,
     // Number of items.
     quantity: number | null,
+    // Order event type
+    type: OrderEvents | null,
     // User who performed the action.
     user:  {
       email: string,
     } | null,
-    // Order event type
-    type: OrderEvents | null,
   } | null > | null,
   // List of shipments for the order.
   fulfillments:  Array< {

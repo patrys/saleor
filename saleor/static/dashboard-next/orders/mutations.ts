@@ -3,6 +3,10 @@ import gql from "graphql-tag";
 import {
   OrderCancelMutation,
   OrderCancelMutationVariables,
+  OrderCaptureMutation,
+  OrderCaptureMutationVariables,
+  OrderCreateFulfillmentMutation,
+  OrderCreateFulfillmentMutationVariables,
   OrderRefundMutation,
   OrderRefundMutationVariables,
   OrderReleaseMutation,
@@ -30,6 +34,10 @@ const orderRefundMutation = gql`
   ${fragmentOrderDetails}
   mutation OrderRefund($id: ID!, $amount: Decimal!) {
     orderRefund(id: $id, amount: $amount) {
+      errors {
+        field
+        message
+      }
       order {
         ...OrderDetails
       }
@@ -55,3 +63,40 @@ export const TypedOrderReleaseMutation = TypedMutation<
   OrderReleaseMutation,
   OrderReleaseMutationVariables
 >(orderReleaseMutation);
+
+const orderCaptureMutation = gql`
+  ${fragmentOrderDetails}
+  mutation OrderCapture($id: ID!, $amount: Decimal!) {
+    orderCapture(id: $id, amount: $amount) {
+      errors {
+        field
+        message
+      }
+      order {
+        ...OrderDetails
+      }
+    }
+  }
+`;
+export const TypedOrderCaptureMutation = TypedMutation<
+  OrderCaptureMutation,
+  OrderCaptureMutationVariables
+>(orderCaptureMutation);
+
+const orderCreateFulfillmentMutation = gql`
+  mutation OrderCreateFulfillment($input: FulfillmentCreateInput!) {
+    fulfillmentCreate(input: $input) {
+      errors {
+        field
+        message
+      }
+      # order {
+      #   ...OrderDetails
+      # }
+    }
+  }
+`;
+export const TypedOrderCreateFulfillmentMutation = TypedMutation<
+  OrderCreateFulfillmentMutation,
+  OrderCreateFulfillmentMutationVariables
+>(orderCreateFulfillmentMutation);
