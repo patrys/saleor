@@ -195,7 +195,7 @@ class CustomerUpdate(CustomerCreate):
         cls, info, old_instance: models.User, new_instance: models.User
     ):
         # Retrieve the event base data
-        staff_user = info.context.user
+        staff_user = info.context["request"].user
         new_email = new_instance.email
         new_fullname = new_instance.get_full_name()
 
@@ -255,7 +255,7 @@ class LoggedUserUpdate(CustomerCreate):
 
     @classmethod
     def perform_mutation(cls, root, info, **data):
-        user = info.context.user
+        user = info.context["request"].user
         data["id"] = graphene.Node.to_global_id("User", user.id)
         return super().perform_mutation(root, info, **data)
 
@@ -345,7 +345,7 @@ class StaffUpdate(StaffCreate):
         cleaned_input = super().clean_input(info, instance, data)
         is_active = cleaned_input.get("is_active")
         if is_active is not None:
-            cls.clean_is_active(is_active, instance, info.context.user)
+            cls.clean_is_active(is_active, instance, info.context["request"].user)
         return cleaned_input
 
 
@@ -360,7 +360,7 @@ class StaffDelete(StaffDeleteMixin, UserDelete):
 
     @classmethod
     def perform_mutation(cls, _root, info, **data):
-        if not cls.check_permissions(info.context.user):
+        if not cls.check_permissions(info.context["request"].user):
             raise PermissionDenied()
 
         user_id = data.get("id")
@@ -426,7 +426,7 @@ class PasswordReset(BaseMutation):
             user = models.User.objects.get(email=email)
         except ObjectDoesNotExist:
             raise ValidationError({"email": "User with this email doesn't exist"})
-        site = info.context.site
+        site = info.context["request"]["site"]
         send_user_password_reset_email(user, site)
         return PasswordReset()
 
@@ -454,7 +454,7 @@ class CustomerPasswordReset(BaseMutation):
             user = models.User.objects.get(email=email)
         except ObjectDoesNotExist:
             raise ValidationError({"email": "User with this email doesn't exist"})
-        site = info.context.site
+        site = info.context["request"]["site"]
         send_user_password_reset_email(user, site)
         return CustomerPasswordReset()
 
@@ -508,7 +508,7 @@ class AddressUpdate(ModelMutation):
     def clean_input(cls, info, instance, data):
         # Method check_permissions cannot be used for permission check, because
         # it doesn't have the address instance.
-        if not can_edit_address(info.context.user, instance):
+        if not can_edit_address(info.context["request"].user, instance):
             raise PermissionDenied()
         return super().clean_input(info, instance, data)
 
@@ -536,13 +536,13 @@ class AddressDelete(ModelDeleteMutation):
     def clean_instance(cls, info, instance):
         # Method check_permissions cannot be used for permission check, because
         # it doesn't have the address instance.
-        if not can_edit_address(info.context.user, instance):
+        if not can_edit_address(info.context["request"].user, instance):
             raise PermissionDenied()
         return super().clean_instance(info, instance)
 
     @classmethod
     def perform_mutation(cls, _root, info, **data):
-        if not cls.check_permissions(info.context.user):
+        if not cls.check_permissions(info.context["request"].user):
             raise PermissionDenied()
 
         node_id = data.get("id")
@@ -636,7 +636,7 @@ class CustomerAddressCreate(ModelMutation):
         success_response = super().perform_mutation(root, info, **data)
         address_type = data.get("type", None)
         if address_type:
-            user = info.context.user
+            user = info.context["request"].user
             instance = success_response.address
             utils.change_user_default_address(user, instance, address_type)
         return success_response
@@ -644,7 +644,7 @@ class CustomerAddressCreate(ModelMutation):
     @classmethod
     def save(cls, info, instance, cleaned_input):
         super().save(info, instance, cleaned_input)
-        user = info.context.user
+        user = info.context["request"].user
         instance.user_addresses.add(user)
 
 
@@ -669,7 +669,7 @@ class CustomerSetDefaultAddress(BaseMutation):
     def perform_mutation(cls, _root, info, **data):
         address = cls.get_node_or_error(info, data.get("id"), Address)
 
-        user = info.context.user
+        user = info.context["request"].user
         if address not in user.addresses.all():
             raise ValidationError({"id": "The address doesn't belong to that user."})
 
@@ -702,7 +702,7 @@ class UserAvatarUpdate(BaseMutation):
     @classmethod
     @staff_member_required
     def perform_mutation(cls, _root, info, image):
-        user = info.context.user
+        user = info.context["request"].user
         image_data = info.context.FILES.get(image)
         validate_image_file(image_data, "image")
 
@@ -725,7 +725,7 @@ class UserAvatarDelete(BaseMutation):
     @classmethod
     @staff_member_required
     def perform_mutation(cls, _root, info):
-        user = info.context.user
+        user = info.context["request"].user
         user.avatar.delete_sized_images()
         user.avatar.delete()
         return UserAvatarDelete(user=user)

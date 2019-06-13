@@ -217,7 +217,7 @@ class ShopSettingsTranslate(BaseMutation):
 
     @classmethod
     def perform_mutation(cls, _root, info, language_code, **data):
-        instance = info.context.site.settings
+        instance = info.context["request"]["site"].settings
         instance.translations.update_or_create(
             language_code=language_code, defaults=data.get("input")
         )

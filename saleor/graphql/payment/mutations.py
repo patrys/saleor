@@ -80,7 +80,7 @@ class CheckoutPaymentCreate(BaseMutation, I18nMixin):
             )
 
         checkout_total = checkout.get_total(
-            discounts=info.context.discounts,
+            discounts=info.context["request"]["discounts"],
             taxes=get_taxes_for_address(checkout.billing_address),
         )
         amount = data.get("amount", checkout_total)
@@ -92,7 +92,9 @@ class CheckoutPaymentCreate(BaseMutation, I18nMixin):
                 }
             )
 
-        extra_data = {"customer_user_agent": info.context.META.get("HTTP_USER_AGENT")}
+        extra_data = {
+            "customer_user_agent": info.context["request"].get("HTTP_USER_AGENT")
+        }
 
         payment = create_payment(
             gateway=data["gateway"],

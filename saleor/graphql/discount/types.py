@@ -56,11 +56,11 @@ class Sale(CountableDjangoObjectType):
 
     @staticmethod
     def resolve_collections(root: models.Sale, info, **_kwargs):
-        return root.collections.visible_to_user(info.context.user)
+        return root.collections.visible_to_user(info.context["request"].user)
 
     @staticmethod
     def resolve_products(root: models.Sale, info, **_kwargs):
-        return root.products.visible_to_user(info.context.user)
+        return root.products.visible_to_user(info.context["request"].user)
 
 
 class Voucher(CountableDjangoObjectType):
@@ -125,11 +125,11 @@ class Voucher(CountableDjangoObjectType):
 
     @staticmethod
     def resolve_collections(root: models.Voucher, info, **_kwargs):
-        return root.collections.visible_to_user(info.context.user)
+        return root.collections.visible_to_user(info.context["request"].user)
 
     @staticmethod
     def resolve_products(root: models.Voucher, info, **_kwargs):
-        return root.products.visible_to_user(info.context.user)
+        return root.products.visible_to_user(info.context["request"].user)
 
     @staticmethod
     def resolve_countries(root: models.Voucher, *_args, **_kwargs):

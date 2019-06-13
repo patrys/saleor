@@ -122,7 +122,9 @@ class FulfillmentCreate(BaseMutation):
             tracking_number=data.pop("tracking_number", None) or "", order=order
         )
         cleaned_input = cls.clean_input(data)
-        fulfillment = cls.save(info.context.user, fulfillment, order, cleaned_input)
+        fulfillment = cls.save(
+            info.context["request"].user, fulfillment, order, cleaned_input
+        )
         return FulfillmentCreate(fulfillment=fulfillment, order=fulfillment.order)
 
 
@@ -151,7 +153,7 @@ class FulfillmentUpdateTracking(BaseMutation):
         order = fulfillment.order
         events.fulfillment_tracking_updated_event(
             order=order,
-            user=info.context.user,
+            user=info.context["request"].user,
             tracking_number=tracking_number,
             fulfillment=fulfillment,
         )
@@ -186,5 +188,5 @@ class FulfillmentCancel(BaseMutation):
             raise ValidationError({"fulfillment": err_msg})
 
         order = fulfillment.order
-        cancel_fulfillment(info.context.user, fulfillment, restock)
+        cancel_fulfillment(info.context["request"].user, fulfillment, restock)
         return FulfillmentCancel(fulfillment=fulfillment, order=order)

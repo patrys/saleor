@@ -200,7 +200,7 @@ class BaseMutation(graphene.Mutation):
 
     @classmethod
     def mutate(cls, root, info, **data):
-        if not cls.check_permissions(info.context.user):
+        if not cls.check_permissions(info.context["request"].user):
             raise PermissionDenied()
 
         try:
@@ -373,7 +373,7 @@ class ModelDeleteMutation(ModelMutation):
     @classmethod
     def perform_mutation(cls, _root, info, **data):
         """Perform a mutation that deletes a model instance."""
-        if not cls.check_permissions(info.context.user):
+        if not cls.check_permissions(info.context["request"].user):
             raise PermissionDenied()
 
         node_id = data.get("id")
@@ -462,7 +462,7 @@ class BaseBulkMutation(BaseMutation):
 
     @classmethod
     def mutate(cls, root, info, **data):
-        if not cls.check_permissions(info.context.user):
+        if not cls.check_permissions(info.context["request"].user):
             raise PermissionDenied()
 
         count, errors = cls.perform_mutation(root, info, **data)
@@ -502,7 +502,7 @@ class CreateToken(ObtainJSONWebToken):
 
     @classmethod
     def resolve(cls, root, info, **kwargs):
-        return cls(user=info.context.user, errors=[])
+        return cls(user=info.context["request"].user, errors=[])
 
 
 class VerifyToken(Verify):

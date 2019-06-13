@@ -47,7 +47,7 @@ def resolve_orders_total(_info, period):
 
 def resolve_order(info, order_id):
     """Return order only for user assigned to it or proper staff user."""
-    user = info.context.user
+    user = info.context["request"].user
     order = graphene.Node.get_node_from_global_id(info, order_id, Order)
     if user.has_perm("order.manage_orders") or order.user == user:
         return order

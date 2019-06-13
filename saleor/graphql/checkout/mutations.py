@@ -131,7 +131,7 @@ class CheckoutCreate(ModelMutation, I18nMixin):
     @classmethod
     def clean_input(cls, info, instance, data):
         cleaned_input = super().clean_input(info, instance, data)
-        user = info.context.user
+        user = info.context["request"].user
         lines = data.pop("lines", None)
         if lines:
             variant_ids = [line.get("variant_id") for line in lines]
@@ -189,7 +189,7 @@ class CheckoutCreate(ModelMutation, I18nMixin):
 
     @classmethod
     def perform_mutation(cls, _root, info, **data):
-        user = info.context.user
+        user = info.context["request"].user
 
         # `perform_mutation` is overridden to properly get or create a checkout
         # instance here and abort mutation if needed.
@@ -243,7 +243,7 @@ class CheckoutLinesAdd(BaseMutation):
         clean_shipping_method(
             checkout=checkout,
             method=checkout.shipping_method,
-            discounts=info.context.discounts,
+            discounts=info.context["request"]["discounts"],
             taxes=get_taxes_for_address(checkout.shipping_address),
         )
 
@@ -252,7 +252,9 @@ class CheckoutLinesAdd(BaseMutation):
                 add_variant_to_checkout(checkout, variant, quantity, replace=replace)
 
         recalculate_checkout_discount(
-            checkout, info.context.discounts, info.context.taxes
+            checkout,
+            info.context["request"]["discounts"],
+            info.context["request"]["taxes"],
         )
 
         return CheckoutLinesAdd(checkout=checkout)
@@ -295,12 +297,14 @@ class CheckoutLineDelete(BaseMutation):
         clean_shipping_method(
             checkout=checkout,
             method=checkout.shipping_method,
-            discounts=info.context.discounts,
+            discounts=info.context["request"]["discounts"],
             taxes=get_taxes_for_address(checkout.shipping_address),
         )
 
         recalculate_checkout_discount(
-            checkout, info.context.discounts, info.context.taxes
+            checkout,
+            info.context["request"]["discounts"],
+            info.context["request"]["taxes"],
         )
 
         return CheckoutLineDelete(checkout=checkout)
@@ -374,7 +378,7 @@ class CheckoutShippingAddressUpdate(BaseMutation, I18nMixin):
         clean_shipping_method(
             checkout=checkout,
             method=checkout.shipping_method,
-            discounts=info.context.discounts,
+            discounts=info.context["request"]["discounts"],
             taxes=get_taxes_for_address(shipping_address),
         )
 
@@ -382,7 +386,9 @@ class CheckoutShippingAddressUpdate(BaseMutation, I18nMixin):
             shipping_address.save()
             change_shipping_address_in_checkout(checkout, shipping_address)
         recalculate_checkout_discount(
-            checkout, info.context.discounts, info.context.taxes
+            checkout,
+            info.context["request"]["discounts"],
+            info.context["request"]["taxes"],
         )
 
         return CheckoutShippingAddressUpdate(checkout=checkout)
@@ -465,15 +471,17 @@ class CheckoutShippingMethodUpdate(BaseMutation):
         clean_shipping_method(
             checkout=checkout,
             method=shipping_method,
-            discounts=info.context.discounts,
-            taxes=info.context.taxes,
+            discounts=info.context["request"]["discounts"],
+            taxes=info.context["request"]["taxes"],
             remove=False,
         )
 
         checkout.shipping_method = shipping_method
         checkout.save(update_fields=["shipping_method"])
         recalculate_checkout_discount(
-            checkout, info.context.discounts, info.context.taxes
+            checkout,
+            info.context["request"]["discounts"],
+            info.context["request"]["taxes"],
         )
 
         return CheckoutShippingMethodUpdate(checkout=checkout)
@@ -498,8 +506,8 @@ class CheckoutComplete(BaseMutation):
             info, checkout_id, only_type=Checkout, field="checkout_id"
         )
 
-        taxes = get_taxes_for_checkout(checkout, info.context.taxes)
-        clean_checkout(checkout, taxes, info.context.discounts)
+        taxes = get_taxes_for_checkout(checkout, info.context["request"]["taxes"])
+        clean_checkout(checkout, taxes, info.context["request"]["discounts"])
 
         payment = checkout.get_last_active_payment()
 
@@ -508,7 +516,7 @@ class CheckoutComplete(BaseMutation):
                 order_data = prepare_order_data(
                     checkout=checkout,
                     tracking_code=analytics.get_client_id(info.context),
-                    discounts=info.context.discounts,
+                    discounts=info.context["request"]["discounts"],
                     taxes=taxes,
                 )
             except InsufficientStock as e:
@@ -531,7 +539,7 @@ class CheckoutComplete(BaseMutation):
 
         # create the order into the database
         order = create_order(
-            checkout=checkout, order_data=order_data, user=info.context.user
+            checkout=checkout, order_data=order_data, user=info.context["request"].user
         )
 
         # remove checkout after order is successfully paid

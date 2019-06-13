@@ -231,7 +231,7 @@ class OrderLine(CountableDjangoObjectType):
         url = get_product_image_thumbnail(
             root.variant.get_first_image(), size, method="thumbnail"
         )
-        return info.context.build_absolute_uri(url)
+        return url
 
     @staticmethod
     @gql_optimizer.resolver_hints(
@@ -245,7 +245,7 @@ class OrderLine(CountableDjangoObjectType):
         image = root.variant.get_first_image()
         url = get_product_image_thumbnail(image, size, method="thumbnail")
         alt = image.alt if image else None
-        return Image(alt=alt, url=info.context.build_absolute_uri(url))
+        return Image(alt=alt, url=url)
 
     @staticmethod
     def resolve_unit_price(root: models.OrderLine, _info):
@@ -398,7 +398,7 @@ class Order(CountableDjangoObjectType):
 
     @staticmethod
     def resolve_fulfillments(root: models.Order, info):
-        user = info.context.user
+        user = info.context["request"].user
         if user.is_staff:
             qs = root.fulfillments.all()
         else:

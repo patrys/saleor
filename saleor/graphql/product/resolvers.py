@@ -70,7 +70,7 @@ def resolve_categories(info, query, level=None):
 
 
 def resolve_collections(info, query):
-    user = info.context.user
+    user = info.context["request"].user
     qs = models.Collection.objects.visible_to_user(user)
     qs = filter_by_query_param(qs, query, COLLECTION_SEARCH_FIELDS)
     qs = qs.order_by("name")
@@ -95,7 +95,7 @@ def resolve_products(
     **_kwargs,
 ):
 
-    user = info.context.user
+    user = info.context["request"].user
     qs = models.Product.objects.visible_to_user(user)
 
     if query:
@@ -129,7 +129,7 @@ def resolve_product_types(info):
 
 
 def resolve_product_variants(info, ids=None):
-    user = info.context.user
+    user = info.context["request"].user
     visible_products = models.Product.objects.visible_to_user(user).values_list(
         "pk", flat=True
     )

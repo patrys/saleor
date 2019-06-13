@@ -31,7 +31,9 @@ class CheckoutLine(CountableDjangoObjectType):
     @staticmethod
     def resolve_total_price(root: models.CheckoutLine, info):
         taxes = get_taxes_for_address(root.checkout.shipping_address)
-        return root.get_total(discounts=info.context.discounts, taxes=taxes)
+        return root.get_total(
+            discounts=info.context["request"]["discounts"], taxes=taxes
+        )
 
     @staticmethod
     def resolve_requires_shipping(root: models.CheckoutLine, *_args):
@@ -111,12 +113,16 @@ class Checkout(CountableDjangoObjectType):
     @staticmethod
     def resolve_total_price(root: models.Checkout, info):
         taxes = get_taxes_for_address(root.shipping_address)
-        return root.get_total(discounts=info.context.discounts, taxes=taxes)
+        return root.get_total(
+            discounts=info.context["request"]["discounts"], taxes=taxes
+        )
 
     @staticmethod
     def resolve_subtotal_price(root: models.Checkout, info):
         taxes = get_taxes_for_address(root.shipping_address)
-        return root.get_subtotal(discounts=info.context.discounts, taxes=taxes)
+        return root.get_subtotal(
+            discounts=info.context["request"]["discounts"], taxes=taxes
+        )
 
     @staticmethod
     def resolve_shipping_price(root: models.Checkout, *_args):
@@ -130,7 +136,9 @@ class Checkout(CountableDjangoObjectType):
     @staticmethod
     def resolve_available_shipping_methods(root: models.Checkout, info):
         taxes = get_taxes_for_address(root.shipping_address)
-        price = root.get_subtotal(taxes=taxes, discounts=info.context.discounts)
+        price = root.get_subtotal(
+            taxes=taxes, discounts=info.context["request"]["discounts"]
+        )
         return applicable_shipping_methods(root, price.gross.amount)
 
     @staticmethod

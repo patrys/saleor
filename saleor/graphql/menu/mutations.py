@@ -300,7 +300,7 @@ class AssignNavigation(BaseMutation):
 
     @classmethod
     def perform_mutation(cls, _root, info, navigation_type, menu=None):
-        site_settings = info.context.site.settings
+        site_settings = info.context["request"]["site"].settings
         if menu is not None:
             menu = cls.get_node_or_error(info, menu, field="menu")
 

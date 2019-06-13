@@ -26,7 +26,7 @@ class OrderBulkCancel(BaseBulkMutation):
 
     @classmethod
     def perform_mutation(cls, root, info, ids, **data):
-        data["user"] = info.context.user
+        data["user"] = info.context["request"].user
         return super().perform_mutation(root, info, ids, **data)
 
     @classmethod

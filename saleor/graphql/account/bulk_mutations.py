@@ -52,7 +52,7 @@ class UserBulkSetActive(BaseBulkMutation):
 
     @classmethod
     def clean_instance(cls, info, instance):
-        if info.context.user == instance:
+        if info.context["request"].user == instance:
             raise ValidationError(
                 {"is_active": "Cannot activate or deactivate your own account."}
             )

@@ -41,7 +41,7 @@ def prefetch_products(info, *_args, **_kwargs):
     requesting user, to restrict access to unpublished products from non-staff
     users.
     """
-    user = info.context.user
+    user = info.context["request"].user
     qs = models.Product.objects.visible_to_user(user)
     return Prefetch(
         "products",
@@ -51,7 +51,7 @@ def prefetch_products(info, *_args, **_kwargs):
 
 
 def prefetch_products_collection_sorted(info, *_args, **_kwargs):
-    user = info.context.user
+    user = info.context["request"].user
     qs = models.Product.objects.collection_sorted(user)
     return Prefetch(
         "products",
@@ -327,7 +327,7 @@ class ProductVariant(CountableDjangoObjectType):
 
     @classmethod
     def get_node(cls, info, id):
-        user = info.context.user
+        user = info.context["request"].user
         visible_products = models.Product.objects.visible_to_user(user).values_list(
             "pk", flat=True
         )
@@ -444,7 +444,7 @@ class Product(CountableDjangoObjectType):
         url = get_product_image_thumbnail(
             root.get_first_image(), size, method="thumbnail"
         )
-        return info.context.build_absolute_uri(url)
+        return url
 
     @staticmethod
     @gql_optimizer.resolver_hints(prefetch_related="images")
@@ -453,7 +453,6 @@ class Product(CountableDjangoObjectType):
         if not size:
             size = 255
         url = get_product_image_thumbnail(image, size, method="thumbnail")
-        url = info.context.build_absolute_uri(url)
         alt = image.alt if image else None
         return Image(alt=alt, url=url)
 
@@ -469,7 +468,7 @@ class Product(CountableDjangoObjectType):
     def resolve_pricing(root: models.Product, info):
         context = info.context
         availability = get_product_availability(
-            root, context.discounts, context.taxes, context.currency
+            root, context["request"]["discounts"], context["request"]["taxes"], context["request"]["currency"]
         )
         return ProductPricingInfo(**availability._asdict())
 
@@ -490,7 +489,7 @@ class Product(CountableDjangoObjectType):
         only=["publication_date", "charge_taxes", "price", "tax_rate"],
     )
     def resolve_price(root: models.Product, info):
-        price_range = root.get_price_range(info.context.discounts)
+        price_range = root.get_price_range(info.context["request"]["discounts"])
         return price_range.start.net
 
     @staticmethod
@@ -541,7 +540,7 @@ class Product(CountableDjangoObjectType):
     @classmethod
     def get_node(cls, info, pk):
         if info.context:
-            qs = cls._meta.model.objects.visible_to_user(info.context.user)
+            qs = cls._meta.model.objects.visible_to_user(info.context["request"].user)
             return cls.maybe_optimize(info, qs, pk)
         return None
 
@@ -589,7 +588,7 @@ class ProductType(CountableDjangoObjectType):
     def resolve_products(root: models.ProductType, info, **_kwargs):
         if hasattr(root, "prefetched_products"):
             return root.prefetched_products
-        qs = root.products.visible_to_user(info.context.user)
+        qs = root.products.visible_to_user(info.context["request"].user)
         return gql_optimizer.query(qs, info)
 
 
@@ -650,7 +649,7 @@ class Collection(CountableDjangoObjectType):
     def resolve_products(root: models.Collection, info, **_kwargs):
         if hasattr(root, "prefetched_products"):
             return root.prefetched_products
-        qs = root.products.collection_sorted(info.context.user)
+        qs = root.products.collection_sorted(info.context["request"].user)
         return gql_optimizer.query(qs, info)
 
     @staticmethod
@@ -660,7 +659,7 @@ class Collection(CountableDjangoObjectType):
     @classmethod
     def get_node(cls, info, id):
         if info.context:
-            user = info.context.user
+            user = info.context["request"].user
             qs = cls._meta.model.objects.visible_to_user(user)
             return cls.maybe_optimize(info, qs, id)
         return None
@@ -771,7 +770,7 @@ class ProductImage(CountableDjangoObjectType):
             url = get_thumbnail(root.image, size, method="thumbnail")
         else:
             url = root.image.url
-        return info.context.build_absolute_uri(url)
+        return url
 
 
 class MoveProductInput(graphene.InputObjectType):

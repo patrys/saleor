@@ -449,7 +449,7 @@ class ProductCreate(ModelMutation):
     def save(cls, info, instance, cleaned_input):
         instance.save()
         if not instance.product_type.has_variants:
-            site_settings = info.context.site.settings
+            site_settings = info.context["request"]["site"].settings
             track_inventory = cleaned_input.get(
                 "track_inventory", site_settings.track_inventory_by_default
             )
