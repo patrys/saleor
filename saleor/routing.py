@@ -1,12 +1,12 @@
 import datetime
 
 from channels.auth import AuthMiddlewareStack
-from channels.db import database_sync_to_async
 from channels.http import AsgiHandler
 from channels.middleware import BaseMiddleware
 from channels.routing import URLRouter
 from django.urls.conf import re_path
 from django.utils.functional import SimpleLazyObject
+from graphql.execution.executors.asyncio import AsyncioExecutor
 from starlette.graphql import GraphQLApp
 
 from .graphql.api import schema
@@ -81,7 +81,11 @@ application = URLRouter(
     [
         re_path(
             "^graphql/",
-            AuthMiddlewareStack(SaleorMiddleware(SaleorGraphQLApp(schema=schema))),
+            AuthMiddlewareStack(
+                SaleorMiddleware(
+                    SaleorGraphQLApp(schema=schema, executor_class=AsyncioExecutor)
+                )
+            ),
         ),
         re_path("", AsgiHandler),
     ]

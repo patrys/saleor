@@ -1,3 +1,5 @@
+import datetime
+
 import graphene
 import graphene_django_optimizer as gql_optimizer
 from django.db.models import Prefetch
@@ -30,6 +32,11 @@ from ...translations.types import (
     ProductVariantTranslation,
 )
 from ...utils import get_database_id, reporting_period_to_date
+from ..dataloaders import (
+    resolve_category_loader,
+    resolve_discounts_loader,
+    resolve_product_image_loader,
+)
 from ..enums import OrderDirection, ProductOrderField
 from .attributes import Attribute, SelectedAttribute
 from .digital_contents import DigitalContent
@@ -206,11 +213,8 @@ class ProductVariant(CountableDjangoObjectType):
         `reportProductSales` query as it uses optimizations suitable
         for such calculations.""",
     )
-    images = gql_optimizer.field(
-        graphene.List(
-            lambda: ProductImage, description="List of images for the product variant"
-        ),
-        model_field="images",
+    images = graphene.List(
+        lambda: ProductImage, description="List of images for the product variant"
     )
     translation = graphene.Field(
         ProductVariantTranslation,
@@ -438,19 +442,25 @@ class Product(CountableDjangoObjectType):
         ]
 
     @staticmethod
-    @gql_optimizer.resolver_hints(prefetch_related="images")
-    def resolve_thumbnail_url(root: models.Product, info, *, size=None):
+    async def resolve_category(root: models.Product, info):
+        loader = resolve_category_loader(info)
+        return await loader.load(root.category_id)
+
+    @staticmethod
+    async def resolve_thumbnail_url(root: models.Product, info, *, size=None):
+        loader = resolve_product_image_loader(info)
+        images = await loader.load(root.id)
+        image = images[0] if images else None
         if not size:
             size = 255
-        url = get_product_image_thumbnail(
-            root.get_first_image(), size, method="thumbnail"
-        )
+        url = get_product_image_thumbnail(image, size, method="thumbnail")
         return url
 
     @staticmethod
-    @gql_optimizer.resolver_hints(prefetch_related="images")
-    def resolve_thumbnail(root: models.Product, info, *, size=None):
-        image = root.get_first_image()
+    async def resolve_thumbnail(root: models.Product, info, *, size=None):
+        loader = resolve_product_image_loader(info)
+        images = await loader.load(root.id)
+        image = images[0] if images else None
         if not size:
             size = 255
         url = get_product_image_thumbnail(image, size, method="thumbnail")
@@ -466,10 +476,12 @@ class Product(CountableDjangoObjectType):
         prefetch_related=("variants", "collections"),
         only=["publication_date", "charge_taxes", "price", "tax_rate"],
     )
-    def resolve_pricing(root: models.Product, info):
+    async def resolve_pricing(root: models.Product, info):
         context = info.context
+        discounts_loader = resolve_discounts_loader(info)
+        discounts = await discounts_loader.load(datetime.date.today())
         availability = get_product_availability(
-            root, context["request"]["discounts"], context["request"]["taxes"], context["request"]["currency"]
+            root, discounts, context["request"]["taxes"], context["request"]["currency"]
         )
         return ProductPricingInfo(**availability._asdict())
 
@@ -489,8 +501,10 @@ class Product(CountableDjangoObjectType):
         prefetch_related=("variants", "collections"),
         only=["publication_date", "charge_taxes", "price", "tax_rate"],
     )
-    def resolve_price(root: models.Product, info):
-        price_range = root.get_price_range(info.context["request"]["discounts"])
+    async def resolve_price(root: models.Product, info):
+        discounts_loader = resolve_discounts_loader(info)
+        discounts = await discounts_loader.load(datetime.date.today())
+        price_range = root.get_price_range(discounts)
         return price_range.start.net
 
     @staticmethod
@@ -522,9 +536,9 @@ class Product(CountableDjangoObjectType):
             raise GraphQLError("Product image not found.")
 
     @staticmethod
-    @gql_optimizer.resolver_hints(model_field="images")
-    def resolve_images(root: models.Product, *_args, **_kwargs):
-        return root.images.all()
+    async def resolve_images(root: models.Product, info, **_kwargs):
+        loader = resolve_product_image_loader(info)
+        return await loader.load(root.id)
 
     @staticmethod
     def resolve_variants(root: models.Product, *_args, **_kwargs):

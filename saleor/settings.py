@@ -318,6 +318,7 @@ LOGGING = {
             "level": "INFO",
             "propagate": True,
         },
+        "django.db": {"level": "DEBUG", "handlers": ["console"], "propagate": False},
         "django.server": {"handlers": ["console"], "level": "INFO", "propagate": True},
         "saleor": {"handlers": ["console"], "level": "DEBUG", "propagate": True},
     },
