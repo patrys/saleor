@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 
 from ...account import models
 from ..core.mutations import BaseBulkMutation, ModelBulkDeleteMutation
+from ..core.resolvers import resolve_user
 from .utils import CustomerDeleteMixin, StaffDeleteMixin
 
 
@@ -52,7 +53,7 @@ class UserBulkSetActive(BaseBulkMutation):
 
     @classmethod
     def clean_instance(cls, info, instance):
-        if info.context["request"].user == instance:
+        if resolve_user(info) == instance:
             raise ValidationError(
                 {"is_active": "Cannot activate or deactivate your own account."}
             )

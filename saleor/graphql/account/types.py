@@ -11,6 +11,7 @@ from ...order import models as order_models
 from ..checkout.types import Checkout
 from ..core.connection import CountableDjangoObjectType
 from ..core.fields import PrefetchingConnectionField
+from ..core.resolvers import resolve_user
 from ..core.types import CountryDisplay, Image, PermissionDisplay
 from ..shop.types import get_node_optimized
 from ..utils import format_permissions_for_display
@@ -236,7 +237,7 @@ class User(CountableDjangoObjectType):
 
     @staticmethod
     def resolve_orders(root: models.User, info, **_kwargs):
-        viewer = info.context["request"].user
+        viewer = resolve_user(info)
         if viewer.has_perm("order.manage_orders"):
             return root.orders.all()
         return root.orders.confirmed()

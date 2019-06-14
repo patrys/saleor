@@ -8,6 +8,7 @@ from ...order.models import FulfillmentStatus
 from ...product.templatetags.product_images import get_product_image_thumbnail
 from ..account.types import User
 from ..core.connection import CountableDjangoObjectType
+from ..core.resolvers import resolve_user
 from ..core.types.common import Image
 from ..core.types.money import Money, TaxedMoney
 from ..giftcard.types import GiftCard
@@ -398,7 +399,7 @@ class Order(CountableDjangoObjectType):
 
     @staticmethod
     def resolve_fulfillments(root: models.Order, info):
-        user = info.context["request"].user
+        user = resolve_user(info)
         if user.is_staff:
             qs = root.fulfillments.all()
         else:

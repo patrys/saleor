@@ -1,6 +1,7 @@
 import graphene
 
 from ...page import models
+from ..core.resolvers import resolve_user
 from ..utils import filter_by_query_param
 from .types import Page
 
@@ -9,7 +10,7 @@ PAGE_SEARCH_FIELDS = ("content", "slug", "title")
 
 def resolve_page(info, page_id=None, slug=None):
     assert page_id or slug, "No page ID or slug provided."
-    user = info.context["request"].user
+    user = resolve_user(info)
 
     if slug is not None:
         try:
@@ -29,6 +30,6 @@ def resolve_page(info, page_id=None, slug=None):
 
 
 def resolve_pages(info, query):
-    user = info.context["request"].user
+    user = resolve_user(info)
     qs = models.Page.objects.visible_to_user(user)
     return filter_by_query_param(qs, query, PAGE_SEARCH_FIELDS)

@@ -16,6 +16,7 @@ from ....order.utils import (
 from ...account.i18n import I18nMixin
 from ...account.types import AddressInput
 from ...core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
+from ...core.resolvers import resolve_user
 from ...core.scalars import Decimal
 from ...product.types import ProductVariant
 from ..types import Order, OrderLine
@@ -136,7 +137,7 @@ class DraftOrderCreate(ModelMutation, I18nMixin):
 
             # New event
             events.draft_order_added_products_event(
-                order=instance, user=info.context["request"].user, order_lines=lines
+                order=instance, user=resolve_user(info), order_lines=lines
             )
 
     @classmethod
@@ -146,9 +147,7 @@ class DraftOrderCreate(ModelMutation, I18nMixin):
 
         # Create draft created event if the instance is from scratch
         if not created:
-            events.draft_order_created_event(
-                order=instance, user=info.context["request"].user
-            )
+            events.draft_order_created_event(order=instance, user=resolve_user(info))
 
         instance.save(update_fields=["billing_address", "shipping_address"])
 
@@ -242,14 +241,12 @@ class DraftOrderComplete(BaseMutation):
                 oversold_items.append(str(line))
 
         events.order_created_event(
-            order=order, user=info.context["request"].user, from_draft=True
+            order=order, user=resolve_user(info), from_draft=True
         )
 
         if oversold_items:
             events.draft_order_oversold_items_event(
-                order=order,
-                user=info.context["request"].user,
-                oversold_items=oversold_items,
+                order=order, user=resolve_user(info), oversold_items=oversold_items
             )
 
         return DraftOrderComplete(order=order)
@@ -304,7 +301,7 @@ class DraftOrderLinesCreate(BaseMutation):
 
         # Create the event
         events.draft_order_added_products_event(
-            order=order, user=info.context["request"].user, order_lines=lines_to_add
+            order=order, user=resolve_user(info), order_lines=lines_to_add
         )
 
         recalculate_order(order)
@@ -337,9 +334,7 @@ class DraftOrderLineDelete(BaseMutation):
 
         # Create the removal event
         events.draft_order_removed_products_event(
-            order=order,
-            user=info.context["request"].user,
-            order_lines=[(line.quantity, line)],
+            order=order, user=resolve_user(info), order_lines=[(line.quantity, line)]
         )
 
         recalculate_order(order)
@@ -377,10 +372,7 @@ class DraftOrderLineUpdate(ModelMutation):
     @classmethod
     def save(cls, info, instance, cleaned_input):
         change_order_line_quantity(
-            info.context["request"].user,
-            instance,
-            instance.old_quantity,
-            instance.quantity,
+            resolve_user(info), instance, instance.old_quantity, instance.quantity
         )
         recalculate_order(instance.order)
 

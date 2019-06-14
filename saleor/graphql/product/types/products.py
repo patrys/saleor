@@ -19,6 +19,7 @@ from ....product.utils.costs import get_margin_for_variant, get_product_costs_da
 from ...core.connection import CountableDjangoObjectType
 from ...core.enums import ReportingPeriod, TaxRateType
 from ...core.fields import PrefetchingConnectionField
+from ...core.resolvers import resolve_user
 from ...core.types import Image, Money, MoneyRange, TaxedMoney, TaxedMoneyRange
 from ...translations.enums import LanguageCodeEnum
 from ...translations.resolvers import resolve_translation
@@ -41,7 +42,7 @@ def prefetch_products(info, *_args, **_kwargs):
     requesting user, to restrict access to unpublished products from non-staff
     users.
     """
-    user = info.context["request"].user
+    user = resolve_user(info)
     qs = models.Product.objects.visible_to_user(user)
     return Prefetch(
         "products",
@@ -51,7 +52,7 @@ def prefetch_products(info, *_args, **_kwargs):
 
 
 def prefetch_products_collection_sorted(info, *_args, **_kwargs):
-    user = info.context["request"].user
+    user = resolve_user(info)
     qs = models.Product.objects.collection_sorted(user)
     return Prefetch(
         "products",
@@ -327,7 +328,7 @@ class ProductVariant(CountableDjangoObjectType):
 
     @classmethod
     def get_node(cls, info, id):
-        user = info.context["request"].user
+        user = resolve_user(info)
         visible_products = models.Product.objects.visible_to_user(user).values_list(
             "pk", flat=True
         )
@@ -540,7 +541,7 @@ class Product(CountableDjangoObjectType):
     @classmethod
     def get_node(cls, info, pk):
         if info.context:
-            qs = cls._meta.model.objects.visible_to_user(info.context["request"].user)
+            qs = cls._meta.model.objects.visible_to_user(resolve_user(info))
             return cls.maybe_optimize(info, qs, pk)
         return None
 
@@ -588,7 +589,7 @@ class ProductType(CountableDjangoObjectType):
     def resolve_products(root: models.ProductType, info, **_kwargs):
         if hasattr(root, "prefetched_products"):
             return root.prefetched_products
-        qs = root.products.visible_to_user(info.context["request"].user)
+        qs = root.products.visible_to_user(resolve_user(info))
         return gql_optimizer.query(qs, info)
 
 
@@ -649,7 +650,7 @@ class Collection(CountableDjangoObjectType):
     def resolve_products(root: models.Collection, info, **_kwargs):
         if hasattr(root, "prefetched_products"):
             return root.prefetched_products
-        qs = root.products.collection_sorted(info.context["request"].user)
+        qs = root.products.collection_sorted(resolve_user(info))
         return gql_optimizer.query(qs, info)
 
     @staticmethod
@@ -659,7 +660,7 @@ class Collection(CountableDjangoObjectType):
     @classmethod
     def get_node(cls, info, id):
         if info.context:
-            user = info.context["request"].user
+            user = resolve_user(info)
             qs = cls._meta.model.objects.visible_to_user(user)
             return cls.maybe_optimize(info, qs, id)
         return None

@@ -3,6 +3,7 @@ import graphene
 from ....order import events, models
 from ....order.utils import cancel_order
 from ...core.mutations import BaseBulkMutation
+from ...core.resolvers import resolve_user
 from ..mutations.orders import clean_order_cancel
 
 
@@ -26,7 +27,7 @@ class OrderBulkCancel(BaseBulkMutation):
 
     @classmethod
     def perform_mutation(cls, root, info, ids, **data):
-        data["user"] = info.context["request"].user
+        data["user"] = resolve_user(info)
         return super().perform_mutation(root, info, ids, **data)
 
     @classmethod

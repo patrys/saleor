@@ -16,6 +16,7 @@ from ....payment.utils import (
 from ....shipping.models import ShippingMethod as ShippingMethodModel
 from ...account.types import AddressInput
 from ...core.mutations import BaseMutation
+from ...core.resolvers import resolve_user
 from ...core.scalars import Decimal
 from ...order.mutations.draft_orders import DraftOrderUpdate
 from ...order.types import Order, OrderEvent
@@ -211,9 +212,7 @@ class OrderAddNote(BaseMutation):
     def perform_mutation(cls, _root, info, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
         event = events.order_note_added_event(
-            order=order,
-            user=info.context["request"].user,
-            message=data.get("input")["message"],
+            order=order, user=resolve_user(info), message=data.get("input")["message"]
         )
         return OrderAddNote(order=order, event=event)
 
@@ -235,7 +234,7 @@ class OrderCancel(BaseMutation):
     def perform_mutation(cls, _root, info, restock, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
         clean_order_cancel(order)
-        cancel_order(user=info.context["request"].user, order=order, restock=restock)
+        cancel_order(user=resolve_user(info), order=order, restock=restock)
         return OrderCancel(order=order)
 
 
@@ -254,10 +253,10 @@ class OrderMarkAsPaid(BaseMutation):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
 
         try_payment_action(
-            order, info.context["request"].user, None, clean_mark_order_as_paid, order
+            order, resolve_user(info), None, clean_mark_order_as_paid, order
         )
 
-        mark_order_as_paid(order, info.context["request"].user)
+        mark_order_as_paid(order, resolve_user(info))
         return OrderMarkAsPaid(order=order)
 
 
@@ -282,19 +281,11 @@ class OrderCapture(BaseMutation):
         clean_order_capture(payment)
 
         try_payment_action(
-            order,
-            info.context["request"].user,
-            payment,
-            gateway_capture,
-            payment,
-            amount,
+            order, resolve_user(info), payment, gateway_capture, payment, amount
         )
 
         events.payment_captured_event(
-            order=order,
-            user=info.context["request"].user,
-            amount=amount,
-            payment=payment,
+            order=order, user=resolve_user(info), amount=amount, payment=payment
         )
         return OrderCapture(order=order)
 
@@ -315,12 +306,10 @@ class OrderVoid(BaseMutation):
         payment = order.get_last_payment()
         clean_void_payment(payment)
 
-        try_payment_action(
-            order, info.context["request"].user, payment, gateway_void, payment
-        )
+        try_payment_action(order, resolve_user(info), payment, gateway_void, payment)
 
         events.payment_voided_event(
-            order=order, user=info.context["request"].user, payment=payment
+            order=order, user=resolve_user(info), payment=payment
         )
         return OrderVoid(order=order)
 
@@ -346,18 +335,10 @@ class OrderRefund(BaseMutation):
         clean_refund_payment(payment)
 
         try_payment_action(
-            order,
-            info.context["request"].user,
-            payment,
-            gateway_refund,
-            payment,
-            amount,
+            order, resolve_user(info), payment, gateway_refund, payment, amount
         )
 
         events.payment_refunded_event(
-            order=order,
-            user=info.context["request"].user,
-            amount=amount,
-            payment=payment,
+            order=order, user=resolve_user(info), amount=amount, payment=payment
         )
         return OrderRefund(order=order)

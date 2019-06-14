@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 
+from ..core.resolvers import resolve_user
 from ...account import events as account_events
 
 
@@ -9,7 +10,7 @@ class UserDeleteMixin:
 
     @classmethod
     def clean_instance(cls, info, instance):
-        user = info.context["request"].user
+        user = resolve_user(info)
         if instance == user:
             raise ValidationError({"id": "You cannot delete your own account."})
         elif instance.is_superuser:
@@ -29,7 +30,7 @@ class CustomerDeleteMixin(UserDeleteMixin):
     @classmethod
     def post_process(cls, info, deleted_count=1):
         account_events.staff_user_deleted_a_customer_event(
-            staff_user=info.context["request"].user, deleted_count=deleted_count
+            staff_user=resolve_user(info), deleted_count=deleted_count
         )
 
 

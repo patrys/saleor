@@ -34,6 +34,7 @@ from ...shipping.models import ShippingMethod as ShippingMethodModel
 from ..account.i18n import I18nMixin
 from ..account.types import AddressInput, User
 from ..core.mutations import BaseMutation, ModelMutation
+from ..core.resolvers import resolve_user
 from ..core.utils import from_global_id_strict_type
 from ..order.types import Order
 from ..product.types import ProductVariant
@@ -131,7 +132,7 @@ class CheckoutCreate(ModelMutation, I18nMixin):
     @classmethod
     def clean_input(cls, info, instance, data):
         cleaned_input = super().clean_input(info, instance, data)
-        user = info.context["request"].user
+        user = resolve_user(info)
         lines = data.pop("lines", None)
         if lines:
             variant_ids = [line.get("variant_id") for line in lines]
@@ -189,7 +190,7 @@ class CheckoutCreate(ModelMutation, I18nMixin):
 
     @classmethod
     def perform_mutation(cls, _root, info, **data):
-        user = info.context["request"].user
+        user = resolve_user(info)
 
         # `perform_mutation` is overridden to properly get or create a checkout
         # instance here and abort mutation if needed.
@@ -539,7 +540,7 @@ class CheckoutComplete(BaseMutation):
 
         # create the order into the database
         order = create_order(
-            checkout=checkout, order_data=order_data, user=info.context["request"].user
+            checkout=checkout, order_data=order_data, user=resolve_user(info)
         )
 
         # remove checkout after order is successfully paid

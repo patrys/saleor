@@ -17,6 +17,7 @@ from graphql_jwt.exceptions import JSONWebTokenError, PermissionDenied
 
 from ...account import models
 from ..account.types import User
+from ..core.resolvers import resolve_user
 from ..utils import get_nodes
 from .types import Error, Upload
 from .utils import snake_to_camel_case
@@ -200,7 +201,7 @@ class BaseMutation(graphene.Mutation):
 
     @classmethod
     def mutate(cls, root, info, **data):
-        if not cls.check_permissions(info.context["request"].user):
+        if not cls.check_permissions(resolve_user(info)):
             raise PermissionDenied()
 
         try:
@@ -373,7 +374,7 @@ class ModelDeleteMutation(ModelMutation):
     @classmethod
     def perform_mutation(cls, _root, info, **data):
         """Perform a mutation that deletes a model instance."""
-        if not cls.check_permissions(info.context["request"].user):
+        if not cls.check_permissions(resolve_user(info)):
             raise PermissionDenied()
 
         node_id = data.get("id")
@@ -462,7 +463,7 @@ class BaseBulkMutation(BaseMutation):
 
     @classmethod
     def mutate(cls, root, info, **data):
-        if not cls.check_permissions(info.context["request"].user):
+        if not cls.check_permissions(resolve_user(info)):
             raise PermissionDenied()
 
         count, errors = cls.perform_mutation(root, info, **data)
@@ -502,7 +503,7 @@ class CreateToken(ObtainJSONWebToken):
 
     @classmethod
     def resolve(cls, root, info, **kwargs):
-        return cls(user=info.context["request"].user, errors=[])
+        return cls(user=resolve_user(info), errors=[])
 
 
 class VerifyToken(Verify):
