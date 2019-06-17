@@ -1,8 +1,9 @@
 import graphene
+from graphene.types import ResolveInfo
 from graphql_jwt.decorators import login_required, permission_required
 
 from ..core.fields import FilterInputConnectionField
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 from ..core.types import FilterInputObjectType
 from ..descriptions import DESCRIPTIONS
 from .bulk_mutations import CustomerBulkDelete, StaffBulkDelete, UserBulkSetActive
@@ -84,8 +85,8 @@ class AccountQueries(graphene.ObjectType):
         return resolve_customers(info, query=query)
 
     @login_required
-    def resolve_me(self, info):
-        return resolve_user(info)
+    def resolve_me(self, info: ResolveInfo):
+        return user_from_context(info.context)
 
     @permission_required("account.manage_staff")
     def resolve_staff_users(self, info, query=None, **_kwargs):

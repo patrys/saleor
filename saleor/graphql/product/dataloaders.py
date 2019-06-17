@@ -1,17 +1,18 @@
 from collections import defaultdict
-from typing import Any, List
+from typing import Any, Dict, List
 
 from aiodataloader import DataLoader
 from channels.db import database_sync_to_async
-from graphene import ResolveInfo
 
-from ..core.resolvers import resolve_user
-from ...discount import SaleInfo
+from ..core.resolvers import user_from_context
+from ...discount import DiscountInfo
 from ...discount.models import Sale
 from ...product import models
 
 
 class DjangoLoader(DataLoader):
+    context_key = None
+
     def __init__(self, *args, user, **kwargs):
         self.user = user
         super().__init__(*args, **kwargs)
@@ -33,13 +34,30 @@ class DjangoLoader(DataLoader):
     def batch_query(self, keys):
         raise NotImplementedError()
 
+    @classmethod
+    def for_context(cls, context: Dict):
+        key = cls.context_key
+        if key is None:
+            raise TypeError("Data loader %r does not define a context key" % (cls,))
+        loaders = context.setdefault("loaders", {})
+        if key not in loaders:
+            user = user_from_context(context)
+            loaders[key] = cls(context=context, user=user)
+        loader = loaders[key]
+        assert isinstance(loader, cls)
+        return loader
+
 
 class CategoryLoader(DjangoLoader):
+    context_key = "category"
+
     def batch_query(self, keys):
         return models.Category.objects.filter(pk__in=keys)
 
 
 class SalesLoader(DjangoLoader):
+    context_key = "sales"
+
     def batch_query(self, keys):
         return [
             (
@@ -53,6 +71,8 @@ class SalesLoader(DjangoLoader):
 
 
 class ProductImagesLoader(DjangoLoader):
+    context_key = "product/images"
+
     def batch_query(self, keys):
         images = models.ProductImage.objects.filter(product_id__in=keys)
         image_map = defaultdict(list)
@@ -62,17 +82,23 @@ class ProductImagesLoader(DjangoLoader):
 
 
 class DiscountsLoader(DjangoLoader):
+    context_key = "discounts"
+
     def fetch_categories(self, sale_pks):
         categories = Sale.categories.through.objects.filter(
             sale_id__in=sale_pks
         ).values_list("sale_id", "category_id")
         category_map = defaultdict(set)
         for sale_pk, category_pk in categories:
-            for subcategory_pk in models.Category.objects.get_descendants(
-                pk=category_pk, include_self=True
-            ).values_list("pk", flat=True):
-                category_map[sale_pk].add(subcategory_pk)
-        return category_map
+            category_map[sale_pk].add(category_pk)
+        subcategory_map = defaultdict(set)
+        for sale_pk, category_pks in category_map.items():
+            subcategory_map[sale_pk] = set(
+                models.Category.tree.filter(pk__in=category_pks)
+                .get_descendants(include_self=True)
+                .values_list("pk", flat=True)
+            )
+        return subcategory_map
 
     def fetch_collections(self, sale_pks):
         collections = Sale.collections.through.objects.filter(
@@ -103,7 +129,7 @@ class DiscountsLoader(DjangoLoader):
             (
                 date,
                 [
-                    SaleInfo(
+                    DiscountInfo(
                         instance=sale,
                         category_ids=categories[sale.pk],
                         collection_ids=collections[sale.pk],
@@ -114,24 +140,3 @@ class DiscountsLoader(DjangoLoader):
             )
             for date, sales in sales_map
         ]
-
-
-def resolve_loader(info: ResolveInfo, key: str, class_: type):
-    context: dict = info.context
-    loaders = context.setdefault("loaders", {})
-    if key not in loaders:
-        user = resolve_user(info)
-        loaders[key] = class_(user=user)
-    return loaders[key]
-
-
-def resolve_category_loader(info: ResolveInfo) -> CategoryLoader:
-    return resolve_loader(info, "category", CategoryLoader)
-
-
-def resolve_discounts_loader(info: ResolveInfo) -> DiscountsLoader:
-    return resolve_loader(info, "discounts", DiscountsLoader)
-
-
-def resolve_product_image_loader(info: ResolveInfo) -> ProductImagesLoader:
-    return resolve_loader(info, "product-images", ProductImagesLoader)

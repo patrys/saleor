@@ -1,4 +1,5 @@
 import graphene
+from graphene.types import ResolveInfo
 
 from ...discount import models as discount_models
 from ...menu import models as menu_models
@@ -6,11 +7,12 @@ from ...page import models as page_models
 from ...product import models as product_models
 from ...shipping import models as shipping_models
 from ..core.mutations import BaseMutation, ModelMutation, registry
+from ..core.resolvers import site_from_context
 from ..shop.types import Shop
 from .enums import LanguageCodeEnum
 
 # discount types need to be imported to get Voucher in the graphene registry
-from ..discount import types  # noqa # pylint: disable=unused-import, isort:skip
+from ..discount import types  # noqa # pylint: disable=unused-import # isort:skip
 
 
 class BaseTranslateMutation(ModelMutation):
@@ -216,8 +218,8 @@ class ShopSettingsTranslate(BaseMutation):
         permissions = ("site.manage_translations",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, language_code, **data):
-        instance = info.context["request"]["site"].settings
+    def perform_mutation(cls, _root, info: ResolveInfo, language_code, **data):
+        instance = site_from_context(info.context).settings
         instance.translations.update_or_create(
             language_code=language_code, defaults=data.get("input")
         )

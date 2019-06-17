@@ -207,8 +207,7 @@ def test_get_value_voucher_discount(
 
 
 @pytest.mark.parametrize(
-    "total, min_amount_spent, shipping_price, discount_value, "
-    "discount_value_type, expected_value",
+    "total, min_amount_spent, shipping_price, discount_value, discount_value_type, expected_value",
     [
         (20, 15, 10, 50, DiscountValueType.PERCENTAGE, 5),
         (20, None, 10, 50, DiscountValueType.PERCENTAGE, 5),

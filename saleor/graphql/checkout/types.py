@@ -1,10 +1,12 @@
 import graphene
 import graphene_django_optimizer as gql_optimizer
 from django.conf import settings
+from graphene.types import ResolveInfo
 
 from ...checkout import models
 from ...core.utils.taxes import get_taxes_for_address
 from ..core.connection import CountableDjangoObjectType
+from ..core.resolvers import discounts_from_context
 from ..core.types.money import TaxedMoney
 from ..giftcard.types import GiftCard
 from ..order.utils import applicable_shipping_methods
@@ -29,11 +31,10 @@ class CheckoutLine(CountableDjangoObjectType):
         filter_fields = ["id"]
 
     @staticmethod
-    def resolve_total_price(root: models.CheckoutLine, info):
+    def resolve_total_price(root: models.CheckoutLine, info: ResolveInfo):
         taxes = get_taxes_for_address(root.checkout.shipping_address)
-        return root.get_total(
-            discounts=info.context["request"]["discounts"], taxes=taxes
-        )
+        discounts = discounts_from_context(info.context)
+        return root.get_total(discounts=discounts, taxes=taxes)
 
     @staticmethod
     def resolve_requires_shipping(root: models.CheckoutLine, *_args):
@@ -111,18 +112,16 @@ class Checkout(CountableDjangoObjectType):
         filter_fields = ["token"]
 
     @staticmethod
-    def resolve_total_price(root: models.Checkout, info):
+    def resolve_total_price(root: models.Checkout, info: ResolveInfo):
         taxes = get_taxes_for_address(root.shipping_address)
-        return root.get_total(
-            discounts=info.context["request"]["discounts"], taxes=taxes
-        )
+        discounts = discounts_from_context(info.context)
+        return root.get_total(discounts=discounts, taxes=taxes)
 
     @staticmethod
-    def resolve_subtotal_price(root: models.Checkout, info):
+    def resolve_subtotal_price(root: models.Checkout, info: ResolveInfo):
         taxes = get_taxes_for_address(root.shipping_address)
-        return root.get_subtotal(
-            discounts=info.context["request"]["discounts"], taxes=taxes
-        )
+        discounts = discounts_from_context(info.context)
+        return root.get_subtotal(discounts=discounts, taxes=taxes)
 
     @staticmethod
     def resolve_shipping_price(root: models.Checkout, *_args):
@@ -134,11 +133,10 @@ class Checkout(CountableDjangoObjectType):
         return root.lines.prefetch_related("variant")
 
     @staticmethod
-    def resolve_available_shipping_methods(root: models.Checkout, info):
+    def resolve_available_shipping_methods(root: models.Checkout, info: ResolveInfo):
         taxes = get_taxes_for_address(root.shipping_address)
-        price = root.get_subtotal(
-            taxes=taxes, discounts=info.context["request"]["discounts"]
-        )
+        discounts = discounts_from_context(info.context)
+        price = root.get_subtotal(taxes=taxes, discounts=discounts)
         return applicable_shipping_methods(root, price.gross.amount)
 
     @staticmethod

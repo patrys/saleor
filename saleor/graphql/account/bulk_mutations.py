@@ -1,9 +1,10 @@
 import graphene
 from django.core.exceptions import ValidationError
+from graphene.types import ResolveInfo
 
 from ...account import models
 from ..core.mutations import BaseBulkMutation, ModelBulkDeleteMutation
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 from .utils import CustomerDeleteMixin, StaffDeleteMixin
 
 
@@ -52,8 +53,8 @@ class UserBulkSetActive(BaseBulkMutation):
         permissions = ("account.manage_users",)
 
     @classmethod
-    def clean_instance(cls, info, instance):
-        if resolve_user(info) == instance:
+    def clean_instance(cls, info: ResolveInfo, instance):
+        if user_from_context(info.context) == instance:
             raise ValidationError(
                 {"is_active": "Cannot activate or deactivate your own account."}
             )

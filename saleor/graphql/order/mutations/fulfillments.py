@@ -1,12 +1,13 @@
 import graphene
 from django.core.exceptions import ValidationError
 from django.utils.translation import npgettext_lazy, pgettext_lazy
+from graphene.types import ResolveInfo
 
 from ....order import events, models
 from ....order.emails import send_fulfillment_confirmation_to_customer
 from ....order.utils import cancel_fulfillment, fulfill_order_line, update_order_status
 from ...core.mutations import BaseMutation
-from ...core.resolvers import resolve_user
+from ...core.resolvers import user_from_context
 from ...order.types import Fulfillment, Order
 from ..types import OrderLine
 
@@ -116,14 +117,16 @@ class FulfillmentCreate(BaseMutation):
         return fulfillment
 
     @classmethod
-    def perform_mutation(cls, _root, info, order, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, order, **data):
         order = cls.get_node_or_error(info, order, field="order", only_type=Order)
         data = data.get("input")
         fulfillment = models.Fulfillment(
             tracking_number=data.pop("tracking_number", None) or "", order=order
         )
         cleaned_input = cls.clean_input(data)
-        fulfillment = cls.save(resolve_user(info), fulfillment, order, cleaned_input)
+        fulfillment = cls.save(
+            user_from_context(info.context), fulfillment, order, cleaned_input
+        )
         return FulfillmentCreate(fulfillment=fulfillment, order=fulfillment.order)
 
 
@@ -144,7 +147,7 @@ class FulfillmentUpdateTracking(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         fulfillment = cls.get_node_or_error(info, data.get("id"), only_type=Fulfillment)
         tracking_number = data.get("input").get("tracking_number") or ""
         fulfillment.tracking_number = tracking_number
@@ -152,7 +155,7 @@ class FulfillmentUpdateTracking(BaseMutation):
         order = fulfillment.order
         events.fulfillment_tracking_updated_event(
             order=order,
-            user=resolve_user(info),
+            user=user_from_context(info.context),
             tracking_number=tracking_number,
             fulfillment=fulfillment,
         )
@@ -175,7 +178,7 @@ class FulfillmentCancel(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         restock = data.get("input").get("restock")
         fulfillment = cls.get_node_or_error(info, data.get("id"), only_type=Fulfillment)
 
@@ -187,5 +190,5 @@ class FulfillmentCancel(BaseMutation):
             raise ValidationError({"fulfillment": err_msg})
 
         order = fulfillment.order
-        cancel_fulfillment(resolve_user(info), fulfillment, restock)
+        cancel_fulfillment(user_from_context(info.context), fulfillment, restock)
         return FulfillmentCancel(fulfillment=fulfillment, order=order)

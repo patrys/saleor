@@ -2,10 +2,12 @@ import graphene
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from graphene.types import ResolveInfo
 
 from ...site import models as site_models
 from ..core.enums import WeightUnitsEnum
 from ..core.mutations import BaseMutation
+from ..core.resolvers import site_from_context
 from ..product.types import Collection
 from .types import AuthorizationKey, AuthorizationKeyType, Shop
 
@@ -51,8 +53,8 @@ class ShopSettingsUpdate(BaseMutation):
         permissions = ("site.manage_settings",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
-        instance = info.context["request"]["site"].settings
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
+        instance = site_from_context(info.context).settings
         data = data.get("input")
         for field_name, desired_value in data.items():
             current_value = getattr(instance, field_name)
@@ -74,8 +76,8 @@ class ShopDomainUpdate(BaseMutation):
         permissions = ("site.manage_settings",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
-        site = info.context["request"]["site"]
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
+        site = site_from_context(info.context)
         data = data.get("input")
         domain = data.get("domain")
         name = data.get("name")
@@ -117,11 +119,11 @@ class HomepageCollectionUpdate(BaseMutation):
         permissions = ("site.manage_settings",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, collection=None):
+    def perform_mutation(cls, _root, info: ResolveInfo, collection=None):
         new_collection = cls.get_node_or_error(
             info, collection, field="collection", only_type=Collection
         )
-        site_settings = info.context["request"]["site"].settings
+        site_settings = site_from_context(info.context).settings
         site_settings.homepage_collection = new_collection
         cls.clean_instance(site_settings)
         site_settings.save(update_fields=["homepage_collection"])
@@ -154,11 +156,11 @@ class AuthorizationKeyAdd(BaseMutation):
         )
 
     @classmethod
-    def perform_mutation(cls, _root, info, key_type, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, key_type, **data):
         if site_models.AuthorizationKey.objects.filter(name=key_type).exists():
             raise ValidationError({"key_type": "Authorization key already exists."})
 
-        site_settings = info.context["request"]["site"].settings
+        site_settings = site_from_context(info.context).settings
         instance = site_models.AuthorizationKey(
             name=key_type, site_settings=site_settings, **data.get("input")
         )
@@ -183,9 +185,9 @@ class AuthorizationKeyDelete(BaseMutation):
         permissions = ("site.manage_settings",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, key_type):
+    def perform_mutation(cls, _root, info: ResolveInfo, key_type):
         try:
-            site_settings = info.context["request"]["site"].settings
+            site_settings = site_from_context(info.context).settings
             instance = site_models.AuthorizationKey.objects.get(
                 name=key_type, site_settings=site_settings
             )

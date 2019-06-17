@@ -1,5 +1,6 @@
 import graphene
 from django.core.exceptions import ValidationError
+from graphene.types import ResolveInfo
 
 from ....account.models import User
 from ....core.utils.taxes import ZERO_TAXED_MONEY
@@ -16,7 +17,7 @@ from ....payment.utils import (
 from ....shipping.models import ShippingMethod as ShippingMethodModel
 from ...account.types import AddressInput
 from ...core.mutations import BaseMutation
-from ...core.resolvers import resolve_user
+from ...core.resolvers import taxes_from_context, user_from_context
 from ...core.scalars import Decimal
 from ...order.mutations.draft_orders import DraftOrderUpdate
 from ...order.types import Order, OrderEvent
@@ -140,7 +141,7 @@ class OrderUpdateShipping(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
         data = data.get("input")
 
@@ -173,7 +174,7 @@ class OrderUpdateShipping(BaseMutation):
         clean_order_update_shipping(order, method)
 
         order.shipping_method = method
-        order.shipping_price = method.get_total(info.context["request"]["taxes"])
+        order.shipping_price = method.get_total(taxes_from_context(info.context))
         order.shipping_method_name = method.name
         order.save(
             update_fields=[
@@ -209,10 +210,11 @@ class OrderAddNote(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
+        user = user_from_context(info.context)
         event = events.order_note_added_event(
-            order=order, user=resolve_user(info), message=data.get("input")["message"]
+            order=order, user=user, message=data.get("input")["message"]
         )
         return OrderAddNote(order=order, event=event)
 
@@ -231,10 +233,11 @@ class OrderCancel(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, restock, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, restock, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
+        user = user_from_context(info.context)
         clean_order_cancel(order)
-        cancel_order(user=resolve_user(info), order=order, restock=restock)
+        cancel_order(user=user, order=order, restock=restock)
         return OrderCancel(order=order)
 
 
@@ -249,14 +252,13 @@ class OrderMarkAsPaid(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
+        user = user_from_context(info.context)
 
-        try_payment_action(
-            order, resolve_user(info), None, clean_mark_order_as_paid, order
-        )
+        try_payment_action(order, user, None, clean_mark_order_as_paid, order)
 
-        mark_order_as_paid(order, resolve_user(info))
+        mark_order_as_paid(order, user)
         return OrderMarkAsPaid(order=order)
 
 
@@ -272,20 +274,19 @@ class OrderCapture(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, amount, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, amount, **data):
         if amount <= 0:
             raise ValidationError({"amount": "Amount should be a positive number."})
 
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
         payment = order.get_last_payment()
+        user = user_from_context(info.context)
         clean_order_capture(payment)
 
-        try_payment_action(
-            order, resolve_user(info), payment, gateway_capture, payment, amount
-        )
+        try_payment_action(order, user, payment, gateway_capture, payment, amount)
 
         events.payment_captured_event(
-            order=order, user=resolve_user(info), amount=amount, payment=payment
+            order=order, user=user, amount=amount, payment=payment
         )
         return OrderCapture(order=order)
 
@@ -301,16 +302,15 @@ class OrderVoid(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
         payment = order.get_last_payment()
+        user = user_from_context(info.context)
         clean_void_payment(payment)
 
-        try_payment_action(order, resolve_user(info), payment, gateway_void, payment)
+        try_payment_action(order, user, payment, gateway_void, payment)
 
-        events.payment_voided_event(
-            order=order, user=resolve_user(info), payment=payment
-        )
+        events.payment_voided_event(order=order, user=user, payment=payment)
         return OrderVoid(order=order)
 
 
@@ -326,19 +326,18 @@ class OrderRefund(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, amount, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, amount, **data):
         if amount <= 0:
             raise ValidationError({"amount": "Amount should be a positive number."})
 
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
         payment = order.get_last_payment()
+        user = user_from_context(info.context)
         clean_refund_payment(payment)
 
-        try_payment_action(
-            order, resolve_user(info), payment, gateway_refund, payment, amount
-        )
+        try_payment_action(order, user, payment, gateway_refund, payment, amount)
 
         events.payment_refunded_event(
-            order=order, user=resolve_user(info), amount=amount, payment=payment
+            order=order, user=user, amount=amount, payment=payment
         )
         return OrderRefund(order=order)

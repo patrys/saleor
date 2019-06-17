@@ -1,9 +1,10 @@
 import graphene
+from graphene.types import ResolveInfo
 from graphql_jwt.decorators import permission_required
 
 from ...giftcard import models
 from ..core.connection import CountableDjangoObjectType
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 
 
 class GiftCard(CountableDjangoObjectType):
@@ -45,8 +46,8 @@ class GiftCard(CountableDjangoObjectType):
         return root.user
 
     @staticmethod
-    def resolve_code(root: models.GiftCard, info, **_kwargs):
-        viewer = resolve_user(info)
+    def resolve_code(root: models.GiftCard, info: ResolveInfo, **_kwargs):
+        viewer = user_from_context(info.context)
         # Staff user has access to show gift card code only for gift card without user.
         if viewer.has_perm("giftcard.manage_gift_card") and not root.user:
             return root.code

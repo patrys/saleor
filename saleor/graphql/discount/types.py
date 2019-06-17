@@ -1,11 +1,12 @@
 import graphene
 import graphene_django_optimizer as gql_optimizer
 from graphene import relay
+from graphene.types import ResolveInfo
 
 from ...discount import models
 from ..core.connection import CountableDjangoObjectType
 from ..core.fields import PrefetchingConnectionField
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 from ..core.types import CountryDisplay
 from ..product.types import Category, Collection, Product
 from ..translations.enums import LanguageCodeEnum
@@ -56,12 +57,12 @@ class Sale(CountableDjangoObjectType):
         return root.categories.all()
 
     @staticmethod
-    def resolve_collections(root: models.Sale, info, **_kwargs):
-        return root.collections.visible_to_user(resolve_user(info))
+    def resolve_collections(root: models.Sale, info: ResolveInfo, **_kwargs):
+        return root.collections.visible_to_user(user_from_context(info.context))
 
     @staticmethod
-    def resolve_products(root: models.Sale, info, **_kwargs):
-        return root.products.visible_to_user(resolve_user(info))
+    def resolve_products(root: models.Sale, info: ResolveInfo, **_kwargs):
+        return root.products.visible_to_user(user_from_context(info.context))
 
 
 class Voucher(CountableDjangoObjectType):
@@ -125,12 +126,12 @@ class Voucher(CountableDjangoObjectType):
         return root.categories.all()
 
     @staticmethod
-    def resolve_collections(root: models.Voucher, info, **_kwargs):
-        return root.collections.visible_to_user(resolve_user(info))
+    def resolve_collections(root: models.Voucher, info: ResolveInfo, **_kwargs):
+        return root.collections.visible_to_user(user_from_context(info.context))
 
     @staticmethod
-    def resolve_products(root: models.Voucher, info, **_kwargs):
-        return root.products.visible_to_user(resolve_user(info))
+    def resolve_products(root: models.Voucher, info: ResolveInfo, **_kwargs):
+        return root.products.visible_to_user(user_from_context(info.context))
 
     @staticmethod
     def resolve_countries(root: models.Voucher, *_args, **_kwargs):

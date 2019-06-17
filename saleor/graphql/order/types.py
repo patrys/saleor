@@ -2,13 +2,14 @@ import graphene
 import graphene_django_optimizer as gql_optimizer
 from django.core.exceptions import ValidationError
 from graphene import relay
+from graphene.types import ResolveInfo
 
 from ...order import models
 from ...order.models import FulfillmentStatus
 from ...product.templatetags.product_images import get_product_image_thumbnail
 from ..account.types import User
 from ..core.connection import CountableDjangoObjectType
-from ..core.resolvers import resolve_user
+from ..core.resolvers import request_from_context, user_from_context
 from ..core.types.common import Image
 from ..core.types.money import Money, TaxedMoney
 from ..giftcard.types import GiftCard
@@ -224,7 +225,7 @@ class OrderLine(CountableDjangoObjectType):
     @gql_optimizer.resolver_hints(
         prefetch_related=["variant__images", "variant__product__images"]
     )
-    def resolve_thumbnail_url(root: models.OrderLine, info, size=None):
+    def resolve_thumbnail_url(root: models.OrderLine, info: ResolveInfo, size=None):
         if not root.variant_id:
             return None
         if not size:
@@ -232,13 +233,14 @@ class OrderLine(CountableDjangoObjectType):
         url = get_product_image_thumbnail(
             root.variant.get_first_image(), size, method="thumbnail"
         )
-        return url
+        request = request_from_context(info.context)
+        return request.build_absolute_uri(url)
 
     @staticmethod
     @gql_optimizer.resolver_hints(
         prefetch_related=["variant__images", "variant__product__images"]
     )
-    def resolve_thumbnail(root: models.OrderLine, info, *, size=None):
+    def resolve_thumbnail(root: models.OrderLine, info: ResolveInfo, *, size=None):
         if not root.variant_id:
             return None
         if not size:
@@ -246,7 +248,8 @@ class OrderLine(CountableDjangoObjectType):
         image = root.variant.get_first_image()
         url = get_product_image_thumbnail(image, size, method="thumbnail")
         alt = image.alt if image else None
-        return Image(alt=alt, url=url)
+        request = request_from_context(info.context)
+        return Image(alt=alt, url=request.build_absolute_uri(url))
 
     @staticmethod
     def resolve_unit_price(root: models.OrderLine, _info):
@@ -398,8 +401,8 @@ class Order(CountableDjangoObjectType):
         return root.total_balance
 
     @staticmethod
-    def resolve_fulfillments(root: models.Order, info):
-        user = resolve_user(info)
+    def resolve_fulfillments(root: models.Order, info: ResolveInfo):
+        user = user_from_context(info.context)
         if user.is_staff:
             qs = root.fulfillments.all()
         else:

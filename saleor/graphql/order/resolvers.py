@@ -1,11 +1,12 @@
 import graphene
 import graphene_django_optimizer as gql_optimizer
+from graphene.types import ResolveInfo
 
 from ...order import OrderStatus, models
 from ...order.events import OrderEvents
 from ...order.models import OrderEvent
 from ...order.utils import sum_order_totals
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 from ..utils import filter_by_period, filter_by_query_param
 from .enums import OrderStatusFilter
 from .types import Order
@@ -46,9 +47,9 @@ def resolve_orders_total(_info, period):
     return sum_order_totals(qs)
 
 
-def resolve_order(info, order_id):
+def resolve_order(info: ResolveInfo, order_id):
     """Return order only for user assigned to it or proper staff user."""
-    user = resolve_user(info)
+    user = user_from_context(info.context)
     order = graphene.Node.get_node_from_global_id(info, order_id, Order)
     if user.has_perm("order.manage_orders") or order.user == user:
         return order

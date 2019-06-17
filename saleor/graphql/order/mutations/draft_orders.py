@@ -1,6 +1,6 @@
 import graphene
 from django.core.exceptions import ValidationError
-from graphene.types import InputObjectType
+from graphene.types import InputObjectType, ResolveInfo
 
 from ....account.models import User
 from ....core.exceptions import InsufficientStock
@@ -16,7 +16,7 @@ from ....order.utils import (
 from ...account.i18n import I18nMixin
 from ...account.types import AddressInput
 from ...core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
-from ...core.resolvers import resolve_user
+from ...core.resolvers import site_from_context, user_from_context
 from ...core.scalars import Decimal
 from ...product.types import ProductVariant
 from ..types import Order, OrderLine
@@ -71,7 +71,7 @@ class DraftOrderCreate(ModelMutation, I18nMixin):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def clean_input(cls, info, instance, data):
+    def clean_input(cls, info: ResolveInfo, instance, data):
         shipping_address = data.pop("shipping_address", None)
         billing_address = data.pop("billing_address", None)
         cleaned_input = super().clean_input(info, instance, data)
@@ -85,9 +85,9 @@ class DraftOrderCreate(ModelMutation, I18nMixin):
             cleaned_input["quantities"] = quantities
 
         cleaned_input["status"] = OrderStatus.DRAFT
-        display_gross_prices = info.context["request"][
-            "site"
-        ].settings.display_gross_prices
+        display_gross_prices = site_from_context(
+            info.context
+        ).settings.display_gross_prices
         cleaned_input["display_gross_prices"] = display_gross_prices
 
         # Set up default addresses if possible
@@ -122,7 +122,7 @@ class DraftOrderCreate(ModelMutation, I18nMixin):
             instance.billing_address = billing_address.get_copy()
 
     @staticmethod
-    def _save_lines(info, instance, quantities, variants):
+    def _save_lines(info: ResolveInfo, instance, quantities, variants):
         if variants and quantities:
             lines = []
             for variant, quantity in zip(variants, quantities):
@@ -137,17 +137,19 @@ class DraftOrderCreate(ModelMutation, I18nMixin):
 
             # New event
             events.draft_order_added_products_event(
-                order=instance, user=resolve_user(info), order_lines=lines
+                order=instance, user=user_from_context(info.context), order_lines=lines
             )
 
     @classmethod
-    def _commit_changes(cls, info, instance, cleaned_input):
+    def _commit_changes(cls, info: ResolveInfo, instance, cleaned_input):
         created = instance.pk
         super().save(info, instance, cleaned_input)
 
         # Create draft created event if the instance is from scratch
         if not created:
-            events.draft_order_created_event(order=instance, user=resolve_user(info))
+            events.draft_order_created_event(
+                order=instance, user=user_from_context(info.context)
+            )
 
         instance.save(update_fields=["billing_address", "shipping_address"])
 
@@ -217,7 +219,7 @@ class DraftOrderComplete(BaseMutation):
                 order.user = None
 
     @classmethod
-    def perform_mutation(cls, _root, info, id):
+    def perform_mutation(cls, _root, info: ResolveInfo, id):
         order = cls.get_node_or_error(info, id, only_type=Order)
         validate_draft_order(order)
         cls.update_user_fields(order)
@@ -241,12 +243,14 @@ class DraftOrderComplete(BaseMutation):
                 oversold_items.append(str(line))
 
         events.order_created_event(
-            order=order, user=resolve_user(info), from_draft=True
+            order=order, user=user_from_context(info.context), from_draft=True
         )
 
         if oversold_items:
             events.draft_order_oversold_items_event(
-                order=order, user=resolve_user(info), oversold_items=oversold_items
+                order=order,
+                user=user_from_context(info.context),
+                oversold_items=oversold_items,
             )
 
         return DraftOrderComplete(order=order)
@@ -273,7 +277,7 @@ class DraftOrderLinesCreate(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         order = cls.get_node_or_error(info, data.get("id"), only_type=Order)
         if order.status != OrderStatus.DRAFT:
             raise ValidationError({"id": "Only draft orders can be edited."})
@@ -301,7 +305,7 @@ class DraftOrderLinesCreate(BaseMutation):
 
         # Create the event
         events.draft_order_added_products_event(
-            order=order, user=resolve_user(info), order_lines=lines_to_add
+            order=order, user=user_from_context(info.context), order_lines=lines_to_add
         )
 
         recalculate_order(order)
@@ -322,7 +326,7 @@ class DraftOrderLineDelete(BaseMutation):
         permissions = ("order.manage_orders",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, id):
+    def perform_mutation(cls, _root, info: ResolveInfo, id):
         line = cls.get_node_or_error(info, id, only_type=OrderLine)
         order = line.order
         if order.status != OrderStatus.DRAFT:
@@ -334,7 +338,9 @@ class DraftOrderLineDelete(BaseMutation):
 
         # Create the removal event
         events.draft_order_removed_products_event(
-            order=order, user=resolve_user(info), order_lines=[(line.quantity, line)]
+            order=order,
+            user=user_from_context(info.context),
+            order_lines=[(line.quantity, line)],
         )
 
         recalculate_order(order)
@@ -370,9 +376,12 @@ class DraftOrderLineUpdate(ModelMutation):
         return cleaned_input
 
     @classmethod
-    def save(cls, info, instance, cleaned_input):
+    def save(cls, info: ResolveInfo, instance, cleaned_input):
         change_order_line_quantity(
-            resolve_user(info), instance, instance.old_quantity, instance.quantity
+            user_from_context(info.context),
+            instance,
+            instance.old_quantity,
+            instance.quantity,
         )
         recalculate_order(instance.order)
 

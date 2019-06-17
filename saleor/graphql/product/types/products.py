@@ -4,6 +4,7 @@ import graphene
 import graphene_django_optimizer as gql_optimizer
 from django.db.models import Prefetch
 from graphene import relay
+from graphene.types import ResolveInfo
 from graphql.error import GraphQLError
 from graphql_jwt.decorators import permission_required
 
@@ -21,7 +22,13 @@ from ....product.utils.costs import get_margin_for_variant, get_product_costs_da
 from ...core.connection import CountableDjangoObjectType
 from ...core.enums import ReportingPeriod, TaxRateType
 from ...core.fields import PrefetchingConnectionField
-from ...core.resolvers import resolve_user
+from ...core.resolvers import (
+    currency_from_context,
+    discounts_from_context,
+    request_from_context,
+    taxes_from_context,
+    user_from_context,
+)
 from ...core.types import Image, Money, MoneyRange, TaxedMoney, TaxedMoneyRange
 from ...translations.enums import LanguageCodeEnum
 from ...translations.resolvers import resolve_translation
@@ -32,24 +39,20 @@ from ...translations.types import (
     ProductVariantTranslation,
 )
 from ...utils import get_database_id, reporting_period_to_date
-from ..dataloaders import (
-    resolve_category_loader,
-    resolve_discounts_loader,
-    resolve_product_image_loader,
-)
+from ..dataloaders import CategoryLoader, DiscountsLoader, ProductImagesLoader
 from ..enums import OrderDirection, ProductOrderField
 from .attributes import Attribute, SelectedAttribute
 from .digital_contents import DigitalContent
 
 
-def prefetch_products(info, *_args, **_kwargs):
+def prefetch_products(info: ResolveInfo, *_args, **_kwargs):
     """Prefetch products visible to the current user.
     Can be used with models that have the `products` relationship. The queryset
     of products being prefetched is filtered based on permissions of the
     requesting user, to restrict access to unpublished products from non-staff
     users.
     """
-    user = resolve_user(info)
+    user = user_from_context(info.context)
     qs = models.Product.objects.visible_to_user(user)
     return Prefetch(
         "products",
@@ -58,8 +61,8 @@ def prefetch_products(info, *_args, **_kwargs):
     )
 
 
-def prefetch_products_collection_sorted(info, *_args, **_kwargs):
-    user = resolve_user(info)
+def prefetch_products_collection_sorted(info: ResolveInfo, *_args, **_kwargs):
+    user = user_from_context(info.context)
     qs = models.Product.objects.collection_sorted(user)
     return Prefetch(
         "products",
@@ -213,8 +216,11 @@ class ProductVariant(CountableDjangoObjectType):
         `reportProductSales` query as it uses optimizations suitable
         for such calculations.""",
     )
-    images = graphene.List(
-        lambda: ProductImage, description="List of images for the product variant"
+    images = gql_optimizer.field(
+        graphene.List(
+            lambda: ProductImage, description="List of images for the product variant"
+        ),
+        model_field="images",
     )
     translation = graphene.Field(
         ProductVariantTranslation,
@@ -331,8 +337,8 @@ class ProductVariant(CountableDjangoObjectType):
         return root.images.all()
 
     @classmethod
-    def get_node(cls, info, id):
-        user = resolve_user(info)
+    def get_node(cls, info: ResolveInfo, id):
+        user = user_from_context(info.context)
         visible_products = models.Product.objects.visible_to_user(user).values_list(
             "pk", flat=True
         )
@@ -442,30 +448,27 @@ class Product(CountableDjangoObjectType):
         ]
 
     @staticmethod
-    async def resolve_category(root: models.Product, info):
-        loader = resolve_category_loader(info)
-        return await loader.load(root.category_id)
-
-    @staticmethod
-    async def resolve_thumbnail_url(root: models.Product, info, *, size=None):
-        loader = resolve_product_image_loader(info)
-        images = await loader.load(root.id)
-        image = images[0] if images else None
+    @gql_optimizer.resolver_hints(prefetch_related="images")
+    def resolve_thumbnail_url(
+        root: models.Product, info: ResolveInfo, *, size=None
+    ):
+        image = root.get_first_image()
         if not size:
             size = 255
         url = get_product_image_thumbnail(image, size, method="thumbnail")
-        return url
+        request = request_from_context(info.context)
+        return request.build_absolute_uri(url)
 
     @staticmethod
-    async def resolve_thumbnail(root: models.Product, info, *, size=None):
-        loader = resolve_product_image_loader(info)
-        images = await loader.load(root.id)
-        image = images[0] if images else None
+    @gql_optimizer.resolver_hints(prefetch_related="images")
+    def resolve_thumbnail(root: models.Product, info: ResolveInfo, *, size=None):
+        image = root.get_first_image()
         if not size:
             size = 255
         url = get_product_image_thumbnail(image, size, method="thumbnail")
         alt = image.alt if image else None
-        return Image(alt=alt, url=url)
+        request = request_from_context(info.context)
+        return Image(alt=alt, url=request.build_absolute_uri(url))
 
     @staticmethod
     def resolve_url(root: models.Product, *_args):
@@ -476,13 +479,11 @@ class Product(CountableDjangoObjectType):
         prefetch_related=("variants", "collections"),
         only=["publication_date", "charge_taxes", "price", "tax_rate"],
     )
-    async def resolve_pricing(root: models.Product, info):
-        context = info.context
-        discounts_loader = resolve_discounts_loader(info)
-        discounts = await discounts_loader.load(datetime.date.today())
-        availability = get_product_availability(
-            root, discounts, context["request"]["taxes"], context["request"]["currency"]
-        )
+    def resolve_pricing(root: models.Product, info: ResolveInfo):
+        discounts = discounts_from_context(info.context)
+        taxes = taxes_from_context(info.context)
+        currency = currency_from_context(info.context)
+        availability = get_product_availability(root, discounts, taxes, currency)
         return ProductPricingInfo(**availability._asdict())
 
     resolve_availability = resolve_pricing
@@ -501,9 +502,8 @@ class Product(CountableDjangoObjectType):
         prefetch_related=("variants", "collections"),
         only=["publication_date", "charge_taxes", "price", "tax_rate"],
     )
-    async def resolve_price(root: models.Product, info):
-        discounts_loader = resolve_discounts_loader(info)
-        discounts = await discounts_loader.load(datetime.date.today())
+    def resolve_price(root: models.Product, info: ResolveInfo):
+        discounts = discounts_from_context(info.context)
         price_range = root.get_price_range(discounts)
         return price_range.start.net
 
@@ -536,9 +536,9 @@ class Product(CountableDjangoObjectType):
             raise GraphQLError("Product image not found.")
 
     @staticmethod
-    async def resolve_images(root: models.Product, info, **_kwargs):
-        loader = resolve_product_image_loader(info)
-        return await loader.load(root.id)
+    @gql_optimizer.resolver_hints(model_field="images")
+    def resolve_images(root: models.Product, info: ResolveInfo, **_kwargs):
+        return root.images.all()
 
     @staticmethod
     def resolve_variants(root: models.Product, *_args, **_kwargs):
@@ -553,9 +553,11 @@ class Product(CountableDjangoObjectType):
         return root.publication_date
 
     @classmethod
-    def get_node(cls, info, pk):
+    def get_node(cls, info: ResolveInfo, pk):
         if info.context:
-            qs = cls._meta.model.objects.visible_to_user(resolve_user(info))
+            qs = cls._meta.model.objects.visible_to_user(
+                user_from_context(info.context)
+            )
             return cls.maybe_optimize(info, qs, pk)
         return None
 
@@ -600,10 +602,10 @@ class ProductType(CountableDjangoObjectType):
         return root.variant_attributes.all()
 
     @staticmethod
-    def resolve_products(root: models.ProductType, info, **_kwargs):
+    def resolve_products(root: models.ProductType, info: ResolveInfo, **_kwargs):
         if hasattr(root, "prefetched_products"):
             return root.prefetched_products
-        qs = root.products.visible_to_user(resolve_user(info))
+        qs = root.products.visible_to_user(user_from_context(info.context))
         return gql_optimizer.query(qs, info)
 
 
@@ -661,10 +663,10 @@ class Collection(CountableDjangoObjectType):
             )
 
     @staticmethod
-    def resolve_products(root: models.Collection, info, **_kwargs):
+    def resolve_products(root: models.Collection, info: ResolveInfo, **_kwargs):
         if hasattr(root, "prefetched_products"):
             return root.prefetched_products
-        qs = root.products.collection_sorted(resolve_user(info))
+        qs = root.products.collection_sorted(user_from_context(info.context))
         return gql_optimizer.query(qs, info)
 
     @staticmethod
@@ -672,9 +674,9 @@ class Collection(CountableDjangoObjectType):
         return root.publication_date
 
     @classmethod
-    def get_node(cls, info, id):
+    def get_node(cls, info: ResolveInfo, id):
         if info.context:
-            user = resolve_user(info)
+            user = user_from_context(info.context)
             qs = cls._meta.model.objects.visible_to_user(user)
             return cls.maybe_optimize(info, qs, id)
         return None
@@ -780,12 +782,13 @@ class ProductImage(CountableDjangoObjectType):
         model = models.ProductImage
 
     @staticmethod
-    def resolve_url(root: models.ProductImage, info, *, size=None):
+    def resolve_url(root: models.ProductImage, info: ResolveInfo, *, size=None):
         if size:
             url = get_thumbnail(root.image, size, method="thumbnail")
         else:
             url = root.image.url
-        return url
+        request = request_from_context(info.context)
+        return request.build_absolute_uri(url)
 
 
 class MoveProductInput(graphene.InputObjectType):

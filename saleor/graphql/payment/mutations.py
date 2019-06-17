@@ -1,6 +1,7 @@
 import graphene
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from graphene.types import ResolveInfo
 
 from ...core.utils import get_client_ip
 from ...core.utils.taxes import get_taxes_for_address
@@ -15,6 +16,7 @@ from ..account.i18n import I18nMixin
 from ..account.types import AddressInput
 from ..checkout.types import Checkout
 from ..core.mutations import BaseMutation
+from ..core.resolvers import discounts_from_context, request_from_context
 from ..core.scalars import Decimal
 from ..core.utils import from_global_id_strict_type
 from .enums import PaymentGatewayEnum
@@ -62,7 +64,7 @@ class CheckoutPaymentCreate(BaseMutation, I18nMixin):
         description = "Create a new payment for given checkout."
 
     @classmethod
-    def perform_mutation(cls, _root, info, checkout_id, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, checkout_id, **data):
         checkout_id = from_global_id_strict_type(
             info, checkout_id, only_type=Checkout, field="checkout_id"
         )
@@ -78,10 +80,10 @@ class CheckoutPaymentCreate(BaseMutation, I18nMixin):
             raise ValidationError(
                 {"billing_address": "No billing address associated with this checkout."}
             )
+        discounts = discounts_from_context(info.context)
 
         checkout_total = checkout.get_total(
-            discounts=info.context["request"]["discounts"],
-            taxes=get_taxes_for_address(checkout.billing_address),
+            discounts=discounts, taxes=get_taxes_for_address(checkout.billing_address)
         )
         amount = data.get("amount", checkout_total)
         if amount < checkout_total.gross.amount:
@@ -93,7 +95,9 @@ class CheckoutPaymentCreate(BaseMutation, I18nMixin):
             )
 
         extra_data = {
-            "customer_user_agent": info.context["request"].get("HTTP_USER_AGENT")
+            "customer_user_agent": request_from_context(info.context).META.get(
+                "HTTP_USER_AGENT"
+            )
         }
 
         payment = create_payment(

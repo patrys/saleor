@@ -6,6 +6,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from graphene.types import ResolveInfo
 from graphql_jwt.decorators import staff_member_required
 from graphql_jwt.exceptions import PermissionDenied
 
@@ -24,7 +25,7 @@ from ..account.i18n import I18nMixin
 from ..account.types import Address, AddressInput, User
 from ..core.enums import PermissionEnum
 from ..core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
-from ..core.resolvers import resolve_user
+from ..core.resolvers import site_from_context, user_from_context
 from ..core.types import Upload
 from ..core.utils import validate_image_file
 from .utils import CustomerDeleteMixin, StaffDeleteMixin, UserDeleteMixin
@@ -193,10 +194,10 @@ class CustomerUpdate(CustomerCreate):
 
     @classmethod
     def generate_events(
-        cls, info, old_instance: models.User, new_instance: models.User
+        cls, info: ResolveInfo, old_instance: models.User, new_instance: models.User
     ):
         # Retrieve the event base data
-        staff_user = resolve_user(info)
+        staff_user = user_from_context(info.context)
         new_email = new_instance.email
         new_fullname = new_instance.get_full_name()
 
@@ -255,8 +256,8 @@ class LoggedUserUpdate(CustomerCreate):
         return user.is_authenticated
 
     @classmethod
-    def perform_mutation(cls, root, info, **data):
-        user = resolve_user(info)
+    def perform_mutation(cls, root, info: ResolveInfo, **data):
+        user = user_from_context(info.context)
         data["id"] = graphene.Node.to_global_id("User", user.id)
         return super().perform_mutation(root, info, **data)
 
@@ -342,11 +343,11 @@ class StaffUpdate(StaffCreate):
                 )
 
     @classmethod
-    def clean_input(cls, info, instance, data):
+    def clean_input(cls, info: ResolveInfo, instance, data):
         cleaned_input = super().clean_input(info, instance, data)
         is_active = cleaned_input.get("is_active")
         if is_active is not None:
-            cls.clean_is_active(is_active, instance, resolve_user(info))
+            cls.clean_is_active(is_active, instance, user_from_context(info.context))
         return cleaned_input
 
 
@@ -360,8 +361,8 @@ class StaffDelete(StaffDeleteMixin, UserDelete):
         id = graphene.ID(required=True, description="ID of a staff user to delete.")
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
-        if not cls.check_permissions(resolve_user(info)):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
+        if not cls.check_permissions(user_from_context(info.context)):
             raise PermissionDenied()
 
         user_id = data.get("id")
@@ -422,12 +423,12 @@ class PasswordReset(BaseMutation):
         permissions = ("account.manage_users",)
 
     @classmethod
-    def perform_mutation(cls, _root, info, email):
+    def perform_mutation(cls, _root, info: ResolveInfo, email):
         try:
             user = models.User.objects.get(email=email)
         except ObjectDoesNotExist:
             raise ValidationError({"email": "User with this email doesn't exist"})
-        site = info.context["request"]["site"]
+        site = site_from_context(info.context)
         send_user_password_reset_email(user, site)
         return PasswordReset()
 
@@ -449,13 +450,13 @@ class CustomerPasswordReset(BaseMutation):
         description = "Resets the customer's password."
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         email = data.get("input")["email"]
         try:
             user = models.User.objects.get(email=email)
         except ObjectDoesNotExist:
             raise ValidationError({"email": "User with this email doesn't exist"})
-        site = info.context["request"]["site"]
+        site = site_from_context(info.context)
         send_user_password_reset_email(user, site)
         return CustomerPasswordReset()
 
@@ -506,10 +507,10 @@ class AddressUpdate(ModelMutation):
         exclude = ["user_addresses"]
 
     @classmethod
-    def clean_input(cls, info, instance, data):
+    def clean_input(cls, info: ResolveInfo, instance, data):
         # Method check_permissions cannot be used for permission check, because
         # it doesn't have the address instance.
-        if not can_edit_address(resolve_user(info), instance):
+        if not can_edit_address(user_from_context(info.context), instance):
             raise PermissionDenied()
         return super().clean_input(info, instance, data)
 
@@ -534,16 +535,16 @@ class AddressDelete(ModelDeleteMutation):
         model = models.Address
 
     @classmethod
-    def clean_instance(cls, info, instance):
+    def clean_instance(cls, info: ResolveInfo, instance):
         # Method check_permissions cannot be used for permission check, because
         # it doesn't have the address instance.
-        if not can_edit_address(resolve_user(info), instance):
+        if not can_edit_address(user_from_context(info.context), instance):
             raise PermissionDenied()
         return super().clean_instance(info, instance)
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
-        if not cls.check_permissions(resolve_user(info)):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
+        if not cls.check_permissions(user_from_context(info.context)):
             raise PermissionDenied()
 
         node_id = data.get("id")
@@ -633,19 +634,19 @@ class CustomerAddressCreate(ModelMutation):
         return user.is_authenticated
 
     @classmethod
-    def perform_mutation(cls, root, info, **data):
+    def perform_mutation(cls, root, info: ResolveInfo, **data):
         success_response = super().perform_mutation(root, info, **data)
         address_type = data.get("type", None)
         if address_type:
-            user = resolve_user(info)
+            user = user_from_context(info.context)
             instance = success_response.address
             utils.change_user_default_address(user, instance, address_type)
         return success_response
 
     @classmethod
-    def save(cls, info, instance, cleaned_input):
+    def save(cls, info: ResolveInfo, instance, cleaned_input):
         super().save(info, instance, cleaned_input)
-        user = resolve_user(info)
+        user = user_from_context(info.context)
         instance.user_addresses.add(user)
 
 
@@ -667,10 +668,10 @@ class CustomerSetDefaultAddress(BaseMutation):
         return user.is_authenticated
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         address = cls.get_node_or_error(info, data.get("id"), Address)
 
-        user = resolve_user(info)
+        user = user_from_context(info.context)
         if address not in user.addresses.all():
             raise ValidationError({"id": "The address doesn't belong to that user."})
 
@@ -702,8 +703,8 @@ class UserAvatarUpdate(BaseMutation):
 
     @classmethod
     @staff_member_required
-    def perform_mutation(cls, _root, info, image):
-        user = resolve_user(info)
+    def perform_mutation(cls, _root, info: ResolveInfo, image):
+        user = user_from_context(info.context)
         image_data = info.context.FILES.get(image)
         validate_image_file(image_data, "image")
 
@@ -725,8 +726,8 @@ class UserAvatarDelete(BaseMutation):
 
     @classmethod
     @staff_member_required
-    def perform_mutation(cls, _root, info):
-        user = resolve_user(info)
+    def perform_mutation(cls, _root, info: ResolveInfo):
+        user = user_from_context(info.context)
         user.avatar.delete_sized_images()
         user.avatar.delete()
         return UserAvatarDelete(user=user)

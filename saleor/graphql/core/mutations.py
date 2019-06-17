@@ -9,6 +9,7 @@ from django.core.exceptions import (
     ValidationError,
 )
 from django.db.models.fields.files import FileField
+from graphene.types import ResolveInfo
 from graphene.types.mutation import MutationOptions
 from graphene_django.registry import get_global_registry
 from graphql.error import GraphQLError
@@ -17,7 +18,7 @@ from graphql_jwt.exceptions import JSONWebTokenError, PermissionDenied
 
 from ...account import models
 from ..account.types import User
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 from ..utils import get_nodes
 from .types import Error, Upload
 from .utils import snake_to_camel_case
@@ -200,8 +201,8 @@ class BaseMutation(graphene.Mutation):
         return True
 
     @classmethod
-    def mutate(cls, root, info, **data):
-        if not cls.check_permissions(resolve_user(info)):
+    def mutate(cls, root, info: ResolveInfo, **data):
+        if not cls.check_permissions(user_from_context(info.context)):
             raise PermissionDenied()
 
         try:
@@ -372,9 +373,9 @@ class ModelDeleteMutation(ModelMutation):
         """
 
     @classmethod
-    def perform_mutation(cls, _root, info, **data):
+    def perform_mutation(cls, _root, info: ResolveInfo, **data):
         """Perform a mutation that deletes a model instance."""
-        if not cls.check_permissions(resolve_user(info)):
+        if not cls.check_permissions(user_from_context(info.context)):
             raise PermissionDenied()
 
         node_id = data.get("id")
@@ -462,8 +463,8 @@ class BaseBulkMutation(BaseMutation):
         return count, errors
 
     @classmethod
-    def mutate(cls, root, info, **data):
-        if not cls.check_permissions(resolve_user(info)):
+    def mutate(cls, root, info: ResolveInfo, **data):
+        if not cls.check_permissions(user_from_context(info.context)):
             raise PermissionDenied()
 
         count, errors = cls.perform_mutation(root, info, **data)
@@ -502,8 +503,8 @@ class CreateToken(ObtainJSONWebToken):
             return result
 
     @classmethod
-    def resolve(cls, root, info, **kwargs):
-        return cls(user=resolve_user(info), errors=[])
+    def resolve(cls, root, info: ResolveInfo, **kwargs):
+        return cls(user=user_from_context(info.context), errors=[])
 
 
 class VerifyToken(Verify):

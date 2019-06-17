@@ -4,7 +4,7 @@ import graphene
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.template.defaultfilters import slugify
-from graphene.types import InputObjectType
+from graphene.types import InputObjectType, ResolveInfo
 
 from ....product import models
 from ....product.tasks import update_variants_names
@@ -16,6 +16,7 @@ from ....product.thumbnails import (
 from ....product.utils.attributes import get_name_from_attributes
 from ...core.enums import TaxRateType
 from ...core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
+from ...core.resolvers import site_from_context
 from ...core.scalars import Decimal, WeightScalar
 from ...core.types import SeoInput, Upload
 from ...core.utils import (
@@ -446,10 +447,10 @@ class ProductCreate(ModelMutation):
 
     @classmethod
     @transaction.atomic
-    def save(cls, info, instance, cleaned_input):
+    def save(cls, info: ResolveInfo, instance, cleaned_input):
         instance.save()
         if not instance.product_type.has_variants:
-            site_settings = info.context["request"]["site"].settings
+            site_settings = site_from_context(info.context).settings
             track_inventory = cleaned_input.get(
                 "track_inventory", site_settings.track_inventory_by_default
             )

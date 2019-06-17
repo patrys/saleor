@@ -2,6 +2,7 @@ import graphene
 from django.conf import settings
 from django_countries import countries
 from django_prices_vatlayer.models import VAT
+from graphene.types import ResolveInfo
 from graphql_jwt.decorators import permission_required
 from phonenumbers import COUNTRY_CODE_TO_REGION_CODE
 
@@ -11,6 +12,7 @@ from ...menu import models as menu_models
 from ...product import models as product_models
 from ...site import models as site_models
 from ..core.enums import WeightUnitsEnum
+from ..core.resolvers import request_from_context, site_from_context
 from ..core.types.common import CountryDisplay, LanguageDisplay, PermissionDisplay
 from ..core.utils import get_node_optimized, str_to_enum
 from ..menu.types import Menu
@@ -159,12 +161,13 @@ class Shop(graphene.ObjectType):
         return settings.AVAILABLE_CURRENCIES
 
     @staticmethod
-    def resolve_domain(_, info):
-        site = info.context["request"]["site"]
+    def resolve_domain(_, info: ResolveInfo):
+        site = site_from_context(info.context)
+        request = request_from_context(info.context)
         return Domain(
             host=site.domain,
             ssl_enabled=settings.ENABLE_SSL,
-            url=str(info.context["request"].url.replace(path="/")),
+            url=request.build_absolute_uri("/"),
         )
 
     @staticmethod
@@ -182,12 +185,12 @@ class Shop(graphene.ObjectType):
         return settings.DEFAULT_CURRENCY
 
     @staticmethod
-    def resolve_description(_, info):
-        return info.context["request"]["site"].settings.description
+    def resolve_description(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.description
 
     @staticmethod
-    def resolve_homepage_collection(_, info):
-        collection_pk = info.context["request"]["site"].settings.homepage_collection_id
+    def resolve_homepage_collection(_, info: ResolveInfo):
+        collection_pk = site_from_context(info.context).settings.homepage_collection_id
         qs = product_models.Collection.objects.all()
         return get_node_optimized(qs, {"pk": collection_pk}, info)
 
@@ -201,12 +204,12 @@ class Shop(graphene.ObjectType):
         ]
 
     @staticmethod
-    def resolve_name(_, info):
-        return info.context["request"]["site"].name
+    def resolve_name(_, info: ResolveInfo):
+        return site_from_context(info.context).name
 
     @staticmethod
-    def resolve_navigation(_, info):
-        site_settings = info.context["request"]["site"].settings
+    def resolve_navigation(_, info: ResolveInfo):
+        site_settings = site_from_context(info.context).settings
         qs = menu_models.Menu.objects.all()
         top_menu = get_node_optimized(qs, {"pk": site_settings.top_menu_id}, info)
         bottom_menu = get_node_optimized(qs, {"pk": site_settings.bottom_menu_id}, info)
@@ -223,28 +226,28 @@ class Shop(graphene.ObjectType):
         return list(COUNTRY_CODE_TO_REGION_CODE.keys())
 
     @staticmethod
-    def resolve_header_text(_, info):
-        return info.context["request"]["site"].settings.header_text
+    def resolve_header_text(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.header_text
 
     @staticmethod
-    def resolve_include_taxes_in_prices(_, info):
-        return info.context["request"]["site"].settings.include_taxes_in_prices
+    def resolve_include_taxes_in_prices(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.include_taxes_in_prices
 
     @staticmethod
-    def resolve_display_gross_prices(_, info):
-        return info.context["request"]["site"].settings.display_gross_prices
+    def resolve_display_gross_prices(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.display_gross_prices
 
     @staticmethod
-    def resolve_charge_taxes_on_shipping(_, info):
-        return info.context["request"]["site"].settings.charge_taxes_on_shipping
+    def resolve_charge_taxes_on_shipping(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.charge_taxes_on_shipping
 
     @staticmethod
-    def resolve_track_inventory_by_default(_, info):
-        return info.context["request"]["site"].settings.track_inventory_by_default
+    def resolve_track_inventory_by_default(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.track_inventory_by_default
 
     @staticmethod
-    def resolve_default_weight_unit(_, info):
-        return info.context["request"]["site"].settings.default_weight_unit
+    def resolve_default_weight_unit(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.default_weight_unit
 
     @staticmethod
     def resolve_default_country(_, _info):
@@ -260,23 +263,23 @@ class Shop(graphene.ObjectType):
         return default_country
 
     @staticmethod
-    def resolve_translation(_, info, language_code):
+    def resolve_translation(_, info: ResolveInfo, language_code):
         return resolve_translation(
-            info.context["request"]["site"].settings, info, language_code
+            site_from_context(info.context).settings, info, language_code
         )
 
     @staticmethod
     @permission_required("site.manage_settings")
-    def resolve_automatic_fulfillment_digital_products(_, info):
-        site_settings = info.context["request"]["site"].settings
+    def resolve_automatic_fulfillment_digital_products(_, info: ResolveInfo):
+        site_settings = site_from_context(info.context).settings
         return site_settings.automatic_fulfillment_digital_products
 
     @staticmethod
     @permission_required("site.manage_settings")
-    def resolve_default_digital_max_downloads(_, info):
-        return info.context["request"]["site"].settings.default_digital_max_downloads
+    def resolve_default_digital_max_downloads(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.default_digital_max_downloads
 
     @staticmethod
     @permission_required("site.manage_settings")
-    def resolve_default_digital_url_valid_days(_, info):
-        return info.context["request"]["site"].settings.default_digital_url_valid_days
+    def resolve_default_digital_url_valid_days(_, info: ResolveInfo):
+        return site_from_context(info.context).settings.default_digital_url_valid_days

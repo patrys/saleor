@@ -3,10 +3,12 @@ from typing import List
 
 import graphene
 from django.core.exceptions import ValidationError
+from graphene.types import ResolveInfo
 from graphql_relay import from_global_id
 
 from ...menu import models
 from ..core.mutations import BaseMutation, ModelDeleteMutation, ModelMutation
+from ..core.resolvers import site_from_context
 from ..page.types import Page
 from ..product.types import Category, Collection
 from .enums import NavigationType
@@ -299,8 +301,8 @@ class AssignNavigation(BaseMutation):
         permissions = ("menu.manage_menus", "site.manage_settings")
 
     @classmethod
-    def perform_mutation(cls, _root, info, navigation_type, menu=None):
-        site_settings = info.context["request"]["site"].settings
+    def perform_mutation(cls, _root, info: ResolveInfo, navigation_type, menu=None):
+        site_settings = site_from_context(info.context).settings
         if menu is not None:
             menu = cls.get_node_or_error(info, menu, field="menu")
 

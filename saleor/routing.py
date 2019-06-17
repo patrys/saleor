@@ -79,14 +79,14 @@ class SaleorGraphQLApp(GraphQLApp):
 
 application = URLRouter(
     [
-        re_path(
-            "^graphql/",
-            AuthMiddlewareStack(
-                SaleorMiddleware(
-                    SaleorGraphQLApp(schema=schema, executor_class=AsyncioExecutor)
-                )
-            ),
-        ),
-        re_path("", AsgiHandler),
+        # re_path(
+        #     "^graphql/",
+        #     AuthMiddlewareStack(
+        #         SaleorMiddleware(
+        #             SaleorGraphQLApp(schema=schema, executor_class=AsyncioExecutor)
+        #         )
+        #     ),
+        # ),
+        re_path("", AsgiHandler)
     ]
 )

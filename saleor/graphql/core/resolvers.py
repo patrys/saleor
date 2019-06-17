@@ -1,13 +1,36 @@
-from starlette.requests import Request
-from graphene import ResolveInfo
+from typing import Dict, Iterable
+
+from django.contrib.sites.models import Site
+from django.http import HttpRequest
 
 from ...account.models import User
+from ...discount import DiscountInfo
 
 
-def resolve_request(info: ResolveInfo) -> Request:
-    return info.context["request"]
+def request_from_context(context: Dict) -> HttpRequest:
+    return context
 
 
-def resolve_user(info: ResolveInfo) -> User:
-    request = resolve_request(info)
+def currency_from_context(context: Dict) -> str:
+    request = request_from_context(context)
+    return request.currency
+
+
+def site_from_context(context: Dict) -> Site:
+    request = request_from_context(context)
+    return request.site
+
+
+def discounts_from_context(context: Dict) -> Iterable[DiscountInfo]:
+    request = request_from_context(context)
+    return request.discounts
+
+
+def taxes_from_context(context: Dict) -> Dict:
+    request = request_from_context(context)
+    return request.taxes
+
+
+def user_from_context(context: Dict) -> User:
+    request = request_from_context(context)
     return request.user

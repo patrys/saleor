@@ -1,6 +1,8 @@
 import graphene
+from graphene.types import ResolveInfo
 
 from ....product.templatetags.product_images import get_thumbnail
+from ...core.resolvers import request_from_context
 from ...translations.enums import LanguageCodeEnum
 from ..enums import PermissionEnum
 from .money import VAT
@@ -61,7 +63,7 @@ class Image(graphene.ObjectType):
         description = "Represents an image."
 
     @staticmethod
-    def get_adjusted(image, alt, size, rendition_key_set, info):
+    def get_adjusted(image, alt, size, rendition_key_set, info: ResolveInfo):
         """Return Image adjusted with given size."""
         if size:
             url = get_thumbnail(
@@ -72,6 +74,8 @@ class Image(graphene.ObjectType):
             )
         else:
             url = image.url
+        request = request_from_context(info.context)
+        url = request.build_absolute_uri(url)
         return Image(url, alt)
 
 

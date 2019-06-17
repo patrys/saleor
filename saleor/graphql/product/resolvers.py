@@ -1,11 +1,12 @@
 import graphene
 import graphene_django_optimizer as gql_optimizer
 from django.db.models import Q, Sum
+from graphene.types import ResolveInfo
 
 from ...order import OrderStatus
 from ...product import models
 from ...search.backends import picker
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 from ..utils import filter_by_period, filter_by_query_param, get_database_id, get_nodes
 from .filters import (
     filter_products_by_attributes,
@@ -70,8 +71,8 @@ def resolve_categories(info, query, level=None):
     return gql_optimizer.query(qs, info)
 
 
-def resolve_collections(info, query):
-    user = resolve_user(info)
+def resolve_collections(info: ResolveInfo, query):
+    user = user_from_context(info.context)
     qs = models.Collection.objects.visible_to_user(user)
     qs = filter_by_query_param(qs, query, COLLECTION_SEARCH_FIELDS)
     qs = qs.order_by("name")
@@ -84,7 +85,7 @@ def resolve_digital_contents(info):
 
 
 def resolve_products(
-    info,
+    info: ResolveInfo,
     attributes=None,
     categories=None,
     collections=None,
@@ -96,7 +97,7 @@ def resolve_products(
     **_kwargs,
 ):
 
-    user = resolve_user(info)
+    user = user_from_context(info.context)
     qs = models.Product.objects.visible_to_user(user)
 
     if query:
@@ -129,8 +130,8 @@ def resolve_product_types(info):
     return gql_optimizer.query(qs, info)
 
 
-def resolve_product_variants(info, ids=None):
-    user = resolve_user(info)
+def resolve_product_variants(info: ResolveInfo, ids=None):
+    user = user_from_context(info.context)
     visible_products = models.Product.objects.visible_to_user(user).values_list(
         "pk", flat=True
     )

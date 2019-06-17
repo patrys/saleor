@@ -2,6 +2,7 @@ import graphene
 import graphene_django_optimizer as gql_optimizer
 from django.contrib.auth import get_user_model
 from graphene import relay
+from graphene.types import ResolveInfo
 from graphql_jwt.decorators import permission_required
 
 from ...account import models
@@ -11,7 +12,7 @@ from ...order import models as order_models
 from ..checkout.types import Checkout
 from ..core.connection import CountableDjangoObjectType
 from ..core.fields import PrefetchingConnectionField
-from ..core.resolvers import resolve_user
+from ..core.resolvers import user_from_context
 from ..core.types import CountryDisplay, Image, PermissionDisplay
 from ..shop.types import get_node_optimized
 from ..utils import format_permissions_for_display
@@ -236,8 +237,8 @@ class User(CountableDjangoObjectType):
         return root.events.all()
 
     @staticmethod
-    def resolve_orders(root: models.User, info, **_kwargs):
-        viewer = resolve_user(info)
+    def resolve_orders(root: models.User, info: ResolveInfo, **_kwargs):
+        viewer = user_from_context(info.context)
         if viewer.has_perm("order.manage_orders"):
             return root.orders.all()
         return root.orders.confirmed()

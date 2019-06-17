@@ -6,6 +6,7 @@ from django.utils.translation import pgettext
 from ..core.utils.taxes import ZERO_MONEY, ZERO_TAXED_MONEY
 from . import DiscountInfo
 from .models import NotApplicable
+from . import DiscountInfo
 
 
 def increase_voucher_usage(voucher):
