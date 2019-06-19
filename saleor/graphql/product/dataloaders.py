@@ -13,7 +13,8 @@ from ...product import models
 class DjangoLoader(DataLoader):
     context_key = None
 
-    def __init__(self, *args, user, **kwargs):
+    def __init__(self, *args, context, user, **kwargs):
+        self.context = context
         self.user = user
         super().__init__(*args, **kwargs)
 
@@ -70,7 +71,7 @@ class SalesLoader(DjangoLoader):
         ]
 
 
-class ProductImagesLoader(DjangoLoader):
+class ProductImageLoader(DjangoLoader):
     context_key = "product/images"
 
     def batch_query(self, keys):
@@ -130,7 +131,7 @@ class DiscountsLoader(DjangoLoader):
                 date,
                 [
                     DiscountInfo(
-                        instance=sale,
+                        sale=sale,
                         category_ids=categories[sale.pk],
                         collection_ids=collections[sale.pk],
                         product_ids=products[sale.pk],

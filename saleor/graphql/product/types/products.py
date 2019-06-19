@@ -39,7 +39,7 @@ from ...translations.types import (
     ProductVariantTranslation,
 )
 from ...utils import get_database_id, reporting_period_to_date
-from ..dataloaders import CategoryLoader, DiscountsLoader, ProductImagesLoader
+from ..dataloaders import CategoryLoader, DiscountsLoader, ProductImageLoader
 from ..enums import OrderDirection, ProductOrderField
 from .attributes import Attribute, SelectedAttribute
 from .digital_contents import DigitalContent
@@ -288,13 +288,12 @@ class ProductVariant(CountableDjangoObjectType):
         )
 
     @staticmethod
-    @gql_optimizer.resolver_hints(
-        prefetch_related=("product",), only=["price_override"]
-    )
-    def resolve_pricing(root: models.ProductVariant, info):
+    async def resolve_pricing(root: models.ProductVariant, info: ResolveInfo):
         context = info.context
+        discount_loader = DiscountsLoader.for_context(context)
+        discounts = await discount_loader.load(datetime.date.today())
         availability = get_variant_availability(
-            root, context.discounts, context.taxes, context.currency
+            root, discounts, taxes_from_context(context), currency_from_context(context)
         )
         return VariantPricingInfo(**availability._asdict())
 
@@ -400,11 +399,8 @@ class Product(CountableDjangoObjectType):
         graphene.List(ProductVariant, description="List of variants for the product"),
         model_field="variants",
     )
-    images = gql_optimizer.field(
-        graphene.List(
-            lambda: ProductImage, description="List of images for the product"
-        ),
-        model_field="images",
+    images = graphene.List(
+        lambda: ProductImage, description="List of images for the product"
     )
     collections = gql_optimizer.field(
         graphene.List(
@@ -448,41 +444,39 @@ class Product(CountableDjangoObjectType):
         ]
 
     @staticmethod
-    @gql_optimizer.resolver_hints(prefetch_related="images")
-    def resolve_thumbnail_url(
+    async def resolve_thumbnail_url(
         root: models.Product, info: ResolveInfo, *, size=None
     ):
-        image = root.get_first_image()
+        loader = ProductImageLoader.for_context(info.context)
+        images = await loader.load(root.id)
+        image = images[0] if images else None
         if not size:
             size = 255
         url = get_product_image_thumbnail(image, size, method="thumbnail")
-        request = request_from_context(info.context)
-        return request.build_absolute_uri(url)
+        return url
 
     @staticmethod
-    @gql_optimizer.resolver_hints(prefetch_related="images")
-    def resolve_thumbnail(root: models.Product, info: ResolveInfo, *, size=None):
-        image = root.get_first_image()
+    async def resolve_thumbnail(root: models.Product, info: ResolveInfo, *, size=None):
+        loader = ProductImageLoader.for_context(info.context)
+        images = await loader.load(root.id)
+        image = images[0] if images else None
         if not size:
             size = 255
         url = get_product_image_thumbnail(image, size, method="thumbnail")
         alt = image.alt if image else None
-        request = request_from_context(info.context)
-        return Image(alt=alt, url=request.build_absolute_uri(url))
+        return Image(alt=alt, url=url)
 
     @staticmethod
     def resolve_url(root: models.Product, *_args):
         return root.get_absolute_url()
 
     @staticmethod
-    @gql_optimizer.resolver_hints(
-        prefetch_related=("variants", "collections"),
-        only=["publication_date", "charge_taxes", "price", "tax_rate"],
-    )
-    def resolve_pricing(root: models.Product, info: ResolveInfo):
-        discounts = discounts_from_context(info.context)
-        taxes = taxes_from_context(info.context)
-        currency = currency_from_context(info.context)
+    async def resolve_pricing(root: models.Product, info: ResolveInfo):
+        context = info.context
+        discount_loader = DiscountsLoader.for_context(context)
+        discounts = await discount_loader.load(datetime.date.today())
+        taxes = taxes_from_context(context)
+        currency = currency_from_context(context)
         availability = get_product_availability(root, discounts, taxes, currency)
         return ProductPricingInfo(**availability._asdict())
 
@@ -536,9 +530,9 @@ class Product(CountableDjangoObjectType):
             raise GraphQLError("Product image not found.")
 
     @staticmethod
-    @gql_optimizer.resolver_hints(model_field="images")
-    def resolve_images(root: models.Product, info: ResolveInfo, **_kwargs):
-        return root.images.all()
+    async def resolve_images(root: models.Product, info: ResolveInfo, **_kwargs):
+        loader = ProductImageLoader.for_context(info.context)
+        return await loader.load(root.id)
 
     @staticmethod
     def resolve_variants(root: models.Product, *_args, **_kwargs):
@@ -787,8 +781,7 @@ class ProductImage(CountableDjangoObjectType):
             url = get_thumbnail(root.image, size, method="thumbnail")
         else:
             url = root.image.url
-        request = request_from_context(info.context)
-        return request.build_absolute_uri(url)
+        return url
 
 
 class MoveProductInput(graphene.InputObjectType):

@@ -167,7 +167,7 @@ class Shop(graphene.ObjectType):
         return Domain(
             host=site.domain,
             ssl_enabled=settings.ENABLE_SSL,
-            url=request.build_absolute_uri("/"),
+            url=request.url.replace(path="/"),
         )
 
     @staticmethod
